@@ -204,6 +204,7 @@ CHGE_HOOK:
 	push af
 	ld a,TRUE
 	ld (IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
+	call FONT_CHECK               ; 9.23: SCREEN/WIDTH โหลดฟอนต์ระบบทับ -> ใส่ฟอนต์ไทยคืน
 	ld a,(PRINT_MODE)
 	or a
 	jr z,.chge_done
@@ -267,6 +268,10 @@ PRINTHOOK:
 	push af
 	xor a
 	ld (IN_CHGET),a               ; 9.21: cursor ที่ CHPUT วาด (ถ้ามี) ไม่ใช่ cursor รอคีย์
+	pop af
+	push af
+	cp $80
+	call nc,FONT_CHECK            ; 9.23: จะพิมพ์อักษรไทย -- เช็คว่าฟอนต์ไทยยังอยู่ใน VRAM
 	ld a,(PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
@@ -1389,3 +1394,34 @@ CUR_BUILD:
 	add hl,sp
 	ld sp,hl
 	ret
+
+; ---- FONT_CHECK (9.23) ----------------------------------------------------------
+; SCREEN / WIDTH ของ BASIC เรียก INITXT/INIT32 ซึ่งโหลดฟอนต์ระบบลง VRAM ทับฟอนต์ไทย (เช่น
+; SCREEN 0:WIDTH 80 บน MSX2) -- เช็ค 2 ไบต์ของ glyph ก ($A1) ใน pattern table ปัจจุบัน ถ้าไม่ใช่ของเรา
+; โหลดฟอนต์ไทยใหม่ทั้งชุด -- เฉพาะโหมดข้อความ (SCREEN 0/1) และตอน THAION -- ทำลาย AF/BC/DE/HL
+FONT_CHECK:
+	ld a,(THAI_MODE)
+	or a
+	ret z
+	ld a,(SCRMOD)
+	cp 2
+	ret nc
+	ld hl,(CGPNT)
+	ld de,$A1*8+1
+	add hl,de
+	call RDVRM
+	ld b,a
+	ld a,(FONT_THAI+$A1*8+1)
+	cp b
+	jr nz,.fc_reload
+	inc hl
+	call RDVRM
+	ld b,a
+	ld a,(FONT_THAI+$A1*8+2)
+	cp b
+	ret z
+.fc_reload:
+	ld hl,FONT_THAI
+	ld de,(CGPNT)
+	ld bc,FONT_THAI_END-FONT_THAI
+	jp LDIRVM

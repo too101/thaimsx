@@ -1,4 +1,4 @@
 FONT MATCH: OK (pattern table 0x0800 matches font_raw.bin exactly)
 H_KEYC opcode after thaion = 247 (expect 247 = 0xF7 RST 30H -- การออกแบบใหม่ CALLF, hook ติดตั้ง)
 H_KEYC opcode after thaioff = 201 (expect 201 = 0xC9 RET -- hook removed)
-final PC=3432
+final PC=3464
