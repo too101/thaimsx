@@ -7,7 +7,7 @@ after time 10 { kpush [concat [str2b "20 print \""] {0xB4 0xD5} [str2b "\r"]] }
 after time 11 { kpush [concat [str2b "30 print \""] {0xB4 0xD5 0xE8} [str2b "\"\r"]] }
 after time 12 { kpush [concat [str2b "40 print \""] {0xBB 0xD9 0xE8} [str2b "\"\r"]] }
 after time 13 {
-    log "PRINT_MODE=[rd 0xFD09] H_CHGE=[format %02X [rd 0xFDC2]] H_PINL=[format %02X [rd 0xFDDB]] H_INLI=[format %02X [rd 0xFDE5]]"
+    log "PRINT_MODE=[wv 0xFD09] H_CHGE=[format %02X [rd 0xFDC2]] H_PINL=[format %02X [rd 0xFDDB]] H_INLI=[format %02X [rd 0xFDE5]]"
     foreach l [dumpprog] { log "PROG $l" }
     kstr "cls\r"
 }

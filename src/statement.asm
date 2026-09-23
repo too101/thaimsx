@@ -26,7 +26,7 @@
 ; จบด้วย $FF
 ; ==========================================================================
 
-STATEMENT:
+STATEMENT_BODY:
 	ei
 	push hl                ; เก็บ continuation pointer ไว้ก่อน
 	ld hl,CMDTAB

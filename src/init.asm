@@ -70,7 +70,7 @@
 ; ไม่มีอะไรพัง) ปลอดภัยกว่าการปล่อยให้คิวเพี้ยนแบบเดิมมาก
 ; ==========================================================================
 
-INIT:
+INIT_BODY:
 	; *** 9.22: เลิกดันคำสั่ง "CALL THAION:?..." เข้าคิวคีย์บอร์ด (ผู้ใช้ขอไม่ให้มีบรรทัดนั้นบนจอ) --
 	; ติดตั้ง hook H.READ แทน: BASIC เรียก H.READ ก่อนพิมพ์ "Ok" ($4128 เหมือนกันทั้ง MSX1/2/2+) ซึ่ง
 	; ครั้งแรกคือหลังพิมพ์ banner ของ MSX BASIC และหลัง INITXT เสร็จแล้ว (ฟอนต์ไม่โดนโหลดทับอีก) --
@@ -78,10 +78,10 @@ INIT:
 	; INIT ถูกเรียกซ้ำได้ระหว่างบูต (บั๊กข้อ 13) -- ถ้า H.READ ชี้มาที่เราแล้วไม่ติดตั้งซ้ำ (ไม่งั้นจะ
 	; สำรอง hook ของตัวเองเป็นค่าเดิม)
 	xor a
-	ld (THAI_MODE),a
-	ld (INPUT_MODE),a
-	ld (PRINT_MODE),a
-	ld (PLOCK_MODE),a
+	ld (ix+THAI_MODE),a
+	ld (ix+INPUT_MODE),a
+	ld (ix+PRINT_MODE),a
+	ld (ix+PLOCK_MODE),a
 	ld a,(H_READ)
 	cp RST30_OPCODE
 	jr nz,.init_hook
@@ -92,23 +92,25 @@ INIT:
 	ret z
 .init_hook:
 	call GET_MY_SLOT              ; ตอน INIT page 1 คือ slot ของเราแน่นอน
-	ld (MY_SLOT_ID),a
+	ld (ix+MY_SLOT_ID),a
 	di
 	ld hl,H_READ
 	ld de,PREV_READ
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,BOOT_HOOK
 	call HOOK_INSTALL
 	ei
 	ret
 
 ; ---- BOOT_HOOK (9.22) -- H.READ ครั้งแรกหลังบูต ----
-BOOT_HOOK:
+BOOT_BODY:
 	push hl
 	push de
 	push bc
 	push af
 	di
 	ld hl,PREV_READ               ; one-shot: คืน hook เดิมก่อน
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_READ
 	ld bc,5
 	ldir
@@ -118,16 +120,16 @@ BOOT_HOOK:
 	dec a                         ; หลัง H.READ) -- ขึ้นบรรทัดก่อนพิมพ์ banner ถ้า cursor ไม่อยู่ต้นบรรทัด
 	jr z,.bh_col1
 	ld a,13
-	call CHPUT
+	call CHPUT_IX
 	ld a,10
-	call CHPUT
+	call CHPUT_IX
 .bh_col1:
 	ld hl,BOOT_BANNER
 .bh_loop:
 	ld a,(hl)
 	or a
 	jr z,.bh_done
-	call CHPUT
+	call CHPUT_IX
 	inc hl
 	jr .bh_loop
 .bh_done:
@@ -135,7 +137,7 @@ BOOT_HOOK:
 	pop bc
 	pop de
 	pop hl
-	jp H_READ                     ; ต่อไปยัง hook เดิม (ปกติคือ RET)
+	ret                           ; 9.27: wrapper BOOT_HOOK (workram.asm) กระโดดต่อ H_READ ให้
 
 BOOT_BANNER:
 	db "BASIC ",$E4,$B7,$C2," version 1.0",13,10,0   ; "BASIC ไทย version 1.0" (TIS-620: ไ=$E4 ท=$B7 ย=$C2)

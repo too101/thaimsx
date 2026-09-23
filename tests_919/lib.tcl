@@ -4,6 +4,17 @@ proc log {s} { puts $::out $s; flush $::out }
 proc rd {a} { binary scan [debug read_block memory $a 1] cu v; return $v }
 proc rd16 {a} { return [expr {[rd $a] + 256*[rd [expr {$a+1}]]}] }
 proc wr {a v} { debug write memory $a $v }
+# 9.27: ตัวแปรของ ROM อยู่ในบล็อกที่ pointer เก็บใน SLTWRK ช่องของ slot เรา -- wv <address เดิม $FDxx>
+set ::wb 0
+proc wbase {} {
+    if {[rd 0xFDCC] == 0xF7} {
+        set s [rd 0xFDCD]
+        set e [expr {0xFD09 + ($s&3)*32 + (($s>>2)&3)*8 + 2}]
+        set ::wb [rd16 $e]
+    }
+    return $::wb
+}
+proc wv {old} { return [rd [expr {[wbase] + $old - 0xFD09}]] }
 # push bytes into the BIOS keyboard queue (PUTPNT=$F3F8, KEYBUF=$FBF0..$FC17)
 proc kpush {bytes} {
     foreach b $bytes {
@@ -52,3 +63,6 @@ proc vramrow {r} {
     set s {}; foreach x $v { lappend s [format %02X $x] }
     return $s
 }
+# 9.27: ตัวแปรของ ROM อยู่ในบล็อกใต้ HIMEM -- หา pointer จาก SLTWRK (ช่องที่ชี้ HIMEM)
+proc blk {} { set h [rd16 0xFC4A]; for {set a 0xFD09} {$a < 0xFD89} {incr a 2} { if {[rd16 $a] == $h} { return $h } }; return 0 }
+proc var {off} { return [rd [expr {[blk] + $off}]] }

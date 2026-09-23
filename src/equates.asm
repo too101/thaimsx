@@ -119,16 +119,29 @@ SCRMOD      equ $FCAF
 ; ย่านนี้ผ่านการทดสอบจริงหนักหน่วงตลอด Phase 3 ทั้งหมด (รวมถึง end-to-end ผ่าน BIOS จริงใน
 ; test_phase3_e2e_biosreal.py) โดยไม่เคยพบการชนกับตัวแปรระบบเลย ($FD11-$FD12 อยู่ในช่องว่างระหว่าง
 ; MY_SLOT_ID ($FD10) กับ PROCNM ($FD89) ที่ยังไม่มีใครใช้)
-INPUT_MODE  equ $FD11   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)
-THAI_MODE   equ $FD12   ; THAION/THAIOFF สวิตช์ใหญ่ -- ย้ายจาก $FCAD (บั๊กข้อ 12)
-PRINT_MODE  equ $FD09   ; PRINTON/PRINTOFF flag (แสดงผล 3 ระดับ) -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
-PLOCK_MODE  equ $FD0A   ; PLOCKON/PLOCKOFF flag -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
+; ---- 9.27: ตัวแปรทั้งหมดย้ายไปอยู่ใน "บล็อกส่วนตัว" ที่ INIT จองด้วยการลด HIMEM (วิธีมาตรฐานของ
+; cartridge) -- pointer ของบล็อกเก็บใน SLTWRK ช่องของ slot เราเอง (page 1) ตามข้อกำหนด MSX
+; ค่า equ ด้านล่างจึงเป็น "offset ในบล็อก" (อ้างผ่าน IX เสมอ: ld a,(ix+THAI_MODE)) -- ตัวเลข $FDxx
+; ที่เห็นคือ layout เดิม ใช้แค่คำนวณ offset (ลบด้วย SLTWRK_OLD) ไม่ได้เขียน RAM ตรงนั้นอีกแล้ว
+SLTWRK_OLD  equ $FD09
+SLTWRK      equ $FD09   ; SLTWRK ของ BIOS: 2 ไบต์ต่อ (slot หลัก, slot รอง, page)
+MAXFIL      equ $F85F   ; จำนวนไฟล์สูงสุด (MAXFILES) -- ใช้ใน FIX_FILES (workram.asm)
+FILTAB      equ $F860   ; ตาราง pointer ไป FCB ของแต่ละไฟล์
+NULBUF      equ $F862   ; buffer ของไฟล์ #0
+MEMSIZ      equ $F672   ; ขอบบนของ string space
+STKTOP      equ $F674   ; ขอบบนของ stack BASIC
+HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
+WORK_SIZE   equ $FD5C-SLTWRK_OLD
+INPUT_MODE  equ $FD11-SLTWRK_OLD   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)
+THAI_MODE   equ $FD12-SLTWRK_OLD   ; THAION/THAIOFF สวิตช์ใหญ่ -- ย้ายจาก $FCAD (บั๊กข้อ 12)
+PRINT_MODE  equ $FD09-SLTWRK_OLD   ; PRINTON/PRINTOFF flag (แสดงผล 3 ระดับ) -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
+PLOCK_MODE  equ $FD0A-SLTWRK_OLD   ; PLOCKON/PLOCKOFF flag -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
 SHIFT_STATE equ $FBEB   ; *** read-only, BIOS ดูแลเอง (ยืนยันจากต้นฉบับ) -- ห้ามเขียนทับ
 PROCNM      equ $FD89   ; buffer ที่ BASIC เก็บชื่อ keyword/CALL ที่ไม่รู้จัก (ยืนยันจาก
                         ; การ disassemble STATEMENT vector ของ ROM ต้นฉบับโดยตรงระหว่าง
                         ; วางแผนโปรเจกต์นี้ -- ไม่ใช่ internal BIOS address แต่เป็นกลไก
                         ; extended-statement มาตรฐานของ BASIC interpreter เอง)
-PREV_KEYC   equ $FD0B   ; *** บั๊กจริงข้อ 8 ยังไม่จบ + ดู "การออกแบบใหม่ (RST 30H)" ด้านล่าง ***
+PREV_KEYC   equ $FD0B-SLTWRK_OLD   ; *** บั๊กจริงข้อ 8 ยังไม่จบ + ดู "การออกแบบใหม่ (RST 30H)" ด้านล่าง ***
                         ; 5 ไบต์ (เพิ่มจาก 3 ไบต์เดิม -- ดูเหตุผลด้านล่าง): สำรองเนื้อ hook slot
                         ; เดิมทั้ง 5 ไบต์ของ H_KEYC ไว้ก่อนติดตั้ง hook ของเรา (Phase 3, ดู
                         ; src/keyboard.asm) เพื่อคืนกลับได้ตอน THAIOFF -- อยู่ติดกับ
@@ -139,13 +152,13 @@ PREV_KEYC   equ $FD0B   ; *** บั๊กจริงข้อ 8 ยังไ�
 ; กับ PROCNM ($FD89) ที่ยืนยันแล้วว่าไม่มีใครใช้ (ดู comment PREV_KEYC ด้านบน) -- ต่อจาก
 ; INPUT_MODE/THAI_MODE ($FD11/$FD12) โดยตรง *** ยังไม่ผ่านการทดสอบ boot เต็มระบบหนักหน่วงเท่า
 ; $FD0B-$FD12 เดิม (เพิ่งเพิ่มระหว่าง PRINTON implementation) -- ต้องเฝ้าดูใน regression test
-PREV_CHPUT   equ $FD13  ; 5 ไบต์ ($FD13-$FD17): สำรองเนื้อ hook slot เดิมของ H_CHPUT (รูปแบบ
+PREV_CHPUT   equ $FD13-SLTWRK_OLD  ; 5 ไบต์ ($FD13-$FD17): สำรองเนื้อ hook slot เดิมของ H_CHPUT (รูปแบบ
                         ; เดียวกับ PREV_KEYC ทุกประการ) ก่อนติดตั้ง PRINTHOOK ตอน THAION
-PRINT_ROW    equ $FD18  ; 1 ไบต์: "เงา" ของค่า CSRY ที่ถูกต้องจริง (ไม่ถูกยักย้ายชั่วคราว) --
+PRINT_ROW    equ $FD18-SLTWRK_OLD  ; 1 ไบต์: "เงา" ของค่า CSRY ที่ถูกต้องจริง (ไม่ถูกยักย้ายชั่วคราว) --
                         ; ใช้แก้ปัญหาที่ CHPUT ตัวจริงของ BIOS ไม่มีสัญญาณ "ฉันจัดการแล้ว ข้าม
                         ; การวาด default" ให้ hook เรียกใช้เลย (ดู comment เต็มที่ PRINTHOOK ใน
                         ; src/printon.asm และ SPEC_TH.md section 5 สำหรับที่มาของ mechanism นี้)
-PRINT_REDIRECT equ $FD19 ; 1 ไบต์ flag: 0=ครั้งก่อนไม่ได้ยักย้าย CSRY (ปกติ), TRUE=ครั้งก่อน
+PRINT_REDIRECT equ $FD19-SLTWRK_OLD ; 1 ไบต์ flag: 0=ครั้งก่อนไม่ได้ยักย้าย CSRY (ปกติ), TRUE=ครั้งก่อน
                         ; ยักย้าย CSRY ชั่วคราวเพื่อวาดตัวประกอบ (สระ/วรรณยุกต์) -- ต้องคืนค่า
                         ; CSRY จาก PRINT_ROW ก่อนประมวลผลตัวอักษรถัดไป
 ;
@@ -158,20 +171,20 @@ PRINT_REDIRECT equ $FD19 ; 1 ไบต์ flag: 0=ครั้งก่อนไ
 ; -- แพทเทิร์นเดียวกับ PRINT_ROW/PRINT_REDIRECT ด้านบนทุกประการ เพียงแต่แก้ "เนื้อ VRAM" แทน
 ; "ตำแหน่งเคอร์เซอร์" -- ข้อจำกัดที่ทราบ: ถ้าผู้ใช้หยุดพิมพ์ทันทีหลังวรรณยุกต์ที่ต้องผสม (ไม่กดอะไร
 ; ต่อเลย รวมถึง Enter) ช่องนั้นจะค้างแสดงวรรณยุกต์เปล่า (ยังไม่ผสม) จนกว่าจะมี CHPUT ครั้งถัดไป
-PRINT_COMBINE_PENDING equ $FD1A ; 1 ไบต์ flag: TRUE = มีการแก้ VRAM ค้างอยู่ที่ต้องทำตอนเรียกครั้งถัดไป
-PRINT_COMBINE_ROW     equ $FD1B ; 1 ไบต์: แถว (1-based เหมือน CSRY) ที่ต้องแก้
-PRINT_COMBINE_COL     equ $FD1C ; 1 ไบต์: คอลัมน์ (0-based เหมือน CSRX) ที่ต้องแก้
-PRINT_COMBINE_CODE    equ $FD1D ; 1 ไบต์: โค้ด glyph ที่ผสมแล้ว (0x83-0x9D) ที่ต้องเขียนทับ
+PRINT_COMBINE_PENDING equ $FD1A-SLTWRK_OLD ; 1 ไบต์ flag: TRUE = มีการแก้ VRAM ค้างอยู่ที่ต้องทำตอนเรียกครั้งถัดไป
+PRINT_COMBINE_ROW     equ $FD1B-SLTWRK_OLD ; 1 ไบต์: แถว (1-based เหมือน CSRY) ที่ต้องแก้
+PRINT_COMBINE_COL     equ $FD1C-SLTWRK_OLD ; 1 ไบต์: คอลัมน์ (0-based เหมือน CSRX) ที่ต้องแก้
+PRINT_COMBINE_CODE    equ $FD1D-SLTWRK_OLD ; 1 ไบต์: โค้ด glyph ที่ผสมแล้ว (0x83-0x9D) ที่ต้องเขียนทับ
 ;
 ; ---- PRINTON "undo combine on backspace" state -- ผู้ใช้ยืนยัน: "ถ้าลบวรรณยุกต์ออกต้อง
 ; กลับมาวาดสระบน" -- ถ้าตัวล่าสุดที่พิมพ์คือวรรณยุกต์ที่ถูกผสมเข้ากับสระบน (ดู PRINT_COMBINE_*
 ; ด้านบน) แล้วตัวถัดไปที่พิมพ์คือ Backspace ($08) ทันที ต้องเขียน VRAM ทับกลับเป็นสระบนเปล่า ๆ
 ; (ไม่ใช่ glyph ผสม) -- valid แค่ "1 ครั้งถัดไป" เท่านั้น (ถูกเคลียร์ทิ้งทันทีถ้าตัวถัดไปที่พิมพ์
 ; ไม่ใช่ BS) ดู comment เต็มที่ PRINTHOOK ขั้น 1.7 ใน src/printon.asm
-PRINT_LAST_MARK_VALID equ $FD1E ; 1 ไบต์ flag: TRUE = มีการผสมที่เพิ่งเกิด ยกเลิกได้ด้วย BS ครั้งถัดไป
-PRINT_LAST_MARK_ROW   equ $FD1F ; 1 ไบต์: แถว (1-based) ที่จะคืนค่า
-PRINT_LAST_MARK_COL   equ $FD20 ; 1 ไบต์: คอลัมน์ (0-based) ที่จะคืนค่า
-PRINT_LAST_MARK_VOWEL equ $FD21 ; 1 ไบต์: โค้ดสระบนเดิม (ก่อนผสม) ที่จะเขียนทับกลับคืน
+PRINT_LAST_MARK_VALID equ $FD1E-SLTWRK_OLD ; 1 ไบต์ flag: TRUE = มีการผสมที่เพิ่งเกิด ยกเลิกได้ด้วย BS ครั้งถัดไป
+PRINT_LAST_MARK_ROW   equ $FD1F-SLTWRK_OLD ; 1 ไบต์: แถว (1-based) ที่จะคืนค่า
+PRINT_LAST_MARK_COL   equ $FD20-SLTWRK_OLD ; 1 ไบต์: คอลัมน์ (0-based) ที่จะคืนค่า
+PRINT_LAST_MARK_VOWEL equ $FD21-SLTWRK_OLD ; 1 ไบต์: โค้ดสระบนเดิม (ก่อนผสม) ที่จะเขียนทับกลับคืน
 ;
 ; ---- PRINTON + ตัวแก้ไขบรรทัดของ BASIC (9.19) -- ดู comment เต็มที่หัวข้อ "INLIN_REBUILD" ใน
 ; src/printon.asm: ตอนกด Enter BIOS อ่านบรรทัดกลับจาก VRAM "เฉพาะแถวที่ cursor อยู่" สระบน/ล่าง/
@@ -180,43 +193,46 @@ PRINT_LAST_MARK_VOWEL equ $FD21 ; 1 ไบต์: โค้ดสระบนเ
 ; นี้มาตั้งแต่ต้น (ทดสอบแล้วว่าไม่มีใครใช้บน config ที่ทดสอบ) ตัวแปรชุดใหม่นี้ต่อท้ายจากเดิม
 ; ($FD22-$FD33) ซึ่งครอบคลุม SLTWRK ของ slot 0-3 และ slot 1-0 -- ถ้าเครื่องจริงมี ROM อื่น (เช่น
 ; disk interface) ใน slot 1-0 อาจชนได้ ควรย้ายไปจองผ่าน HIMEM ในอนาคตถ้าเจอปัญหา
-PREV_CHGE      equ $FD22  ; 5 ไบต์: สำรอง hook slot เดิมของ H_CHGE ($FD22-$FD26)
-PREV_PINL      equ $FD27  ; 5 ไบต์: สำรอง hook slot เดิมของ H_PINL ($FD27-$FD2B)
-PREV_INLI      equ $FD2C  ; 5 ไบต์: สำรอง hook slot เดิมของ H_INLI ($FD2C-$FD30)
-INLIN_ACTIVE   equ $FD31  ; 1 ไบต์ flag: TRUE = BIOS กำลังรับบรรทัด (PINLIN/INLIN/QINLIN) ขณะ PRINTON
+PREV_CHGE      equ $FD22-SLTWRK_OLD  ; 5 ไบต์: สำรอง hook slot เดิมของ H_CHGE ($FD22-$FD26)
+PREV_PINL      equ $FD27-SLTWRK_OLD  ; 5 ไบต์: สำรอง hook slot เดิมของ H_PINL ($FD27-$FD2B)
+PREV_INLI      equ $FD2C-SLTWRK_OLD  ; 5 ไบต์: สำรอง hook slot เดิมของ H_INLI ($FD2C-$FD30)
+INLIN_ACTIVE   equ $FD31-SLTWRK_OLD  ; 1 ไบต์ flag: TRUE = BIOS กำลังรับบรรทัด (PINLIN/INLIN/QINLIN) ขณะ PRINTON
                           ; เปิด -- LF ตัวถัดไปที่ผ่าน PRINTHOOK คือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดเข้า
                           ; BUF เสร็จ (ยืนยันจาก disassembly: MSX1/MSX2/MSX2+ ที่ $24B9 เหมือนกันทั้ง 3 รุ่น)
-RB_ROW         equ $FD32  ; 1 ไบต์ scratch ของ INLIN_REBUILD: แถว (1-based) ของบรรทัดที่อ่าน
-RB_COL         equ $FD33  ; 1 ไบต์ scratch ของ INLIN_REBUILD: คอลัมน์ (1-based) ที่กำลังอ่าน
-PRINT_IN_LF    equ $FD34  ; 1 ไบต์ flag (9.20): PRINTHOOK กำลังเรียก CHPUT(LF) ซ้อนเองเพื่อ scroll -- ตัวซ้อนปล่อยผ่าน
+RB_ROW         equ $FD32-SLTWRK_OLD  ; 1 ไบต์ scratch ของ INLIN_REBUILD: แถว (1-based) ของบรรทัดที่อ่าน
+RB_COL         equ $FD33-SLTWRK_OLD  ; 1 ไบต์ scratch ของ INLIN_REBUILD: คอลัมน์ (1-based) ที่กำลังอ่าน
+PRINT_IN_LF    equ $FD34-SLTWRK_OLD  ; 1 ไบต์ flag (9.20): PRINTHOOK กำลังเรียก CHPUT(LF) ซ้อนเองเพื่อ scroll -- ตัวซ้อนปล่อยผ่าน
 ; ---- 9.20: โค้ดส่วนตัวที่ KEYC_HOOK ดันเข้าคิวแทน BS/DEL ระหว่างรับบรรทัดขณะ PRINTON (ดู THAI_BS ใน
 ; printon.asm) -- INLIN ส่ง control code ที่ไม่อยู่ในตาราง dispatch ของมันไป CHPUT ตรง ๆ ($2428)
 ; และ CHPUT เองไม่ทำอะไรกับโค้ดเหล่านี้ PRINTHOOK จึงได้จัดการ BS/DEL แบบรู้จักแถวสระบน/ล่างเอง
 ; ---- 9.21: cursor แยกสถานะไทย/อังกฤษ (ดู CUR_BUILD ใน printon.asm) ----
-IN_CHGET       equ $FD35  ; 1 ไบต์: CHGE_HOOK ตั้ง = กำลังจะวาด cursor รอคีย์ใน CHGET
-CUR_WAITING    equ $FD36  ; 1 ไบต์: cursor ของ CHGET แสดงอยู่ (ระหว่าง DSPC..ERAC) -- วาดใหม่ตอนกดสลับภาษาได้
-CUR_ACTIVE     equ $FD37  ; 1 ไบต์: เราแทนช่อง cursor ด้วยโค้ด 255 เอง -- ERAC ต้องคืนตัวจริงให้ BIOS
-CUR_REAL       equ $FD38  ; 1 ไบต์: ตัวอักษรจริงใต้ cursor
-PREV_DSPC      equ $FD39  ; 5 ไบต์ ($FD39-$FD3D)
-PREV_ERAC      equ $FD3E  ; 5 ไบต์ ($FD3E-$FD42)
+IN_CHGET       equ $FD35-SLTWRK_OLD  ; 1 ไบต์: CHGE_HOOK ตั้ง = กำลังจะวาด cursor รอคีย์ใน CHGET
+CUR_WAITING    equ $FD36-SLTWRK_OLD  ; 1 ไบต์: cursor ของ CHGET แสดงอยู่ (ระหว่าง DSPC..ERAC) -- วาดใหม่ตอนกดสลับภาษาได้
+PREV_DSPC      equ $FD39-SLTWRK_OLD  ; 5 ไบต์ ($FD39-$FD3D)
+PREV_ERAC      equ $FD3E-SLTWRK_OLD  ; 5 ไบต์ ($FD3E-$FD42)
 H_DSPC         equ $FDA9  ; hook ต้น routine แสดง cursor (MSX1 $09E6, MSX2/2+ $0A43 -- logic เหมือนกัน)
 H_ERAC         equ $FDAE  ; hook ต้น routine ลบ cursor (MSX1 $0A33, MSX2/2+ $0A90)
+H_TIMI         equ $FD9F  ; hook ทุก VDP interrupt (1/60 หรือ 1/50 วินาที) -- A = VDP status ต้องส่งต่อ
+BLINK_FRAMES   equ 20     ; สลับติด/ดับทุก 20 frame
 CURSAV         equ $FBCC  ; ตัวอักษรใต้ cursor ที่ BIOS เก็บไว้เขียนคืนตอนลบ cursor
 CSTYLE         equ $FCAA  ; รูป cursor ของ BIOS: 0 = ทึบ 8 แถว, อื่น = ขีดล่าง 3 แถว (โหมด INS)
 FNKSWI         equ $FBCD  ; สถานะ SHIFT ตอนวาดป้าย function key ล่าสุด (BIOS วาดป้ายใหม่ถ้าต่างจากตอนนี้)
-PREV_READ      equ $FD43  ; 5 ไบต์ ($FD43-$FD47): hook H.READ เดิม ก่อนติดตั้ง BOOT_HOOK (9.22)
+PREV_READ      equ $FD43-SLTWRK_OLD  ; 5 ไบต์ ($FD43-$FD47): hook H.READ เดิม ก่อนติดตั้ง BOOT_HOOK (9.22)
 ; ---- 9.25: บรรทัดยาวต่อแถว (continuation) ขณะ PRINTON -- ดู WRAP_FIX ใน printon.asm ----
-WRAP_PENDING   equ $FD48  ; 1 ไบต์: เพิ่งพิมพ์ตัวปกติลงคอลัมน์สุดท้าย -> BIOS จะตัดขึ้นแถวถัดไป (แถว+1)
-GHOST_PENDING  equ $FD49  ; 1 ไบต์: วาดสระของตัวคอลัมน์สุดท้ายเอง แล้วปล่อย BIOS วาดตัวหลอกที่ cursor
-GHOST_ROW      equ $FD4A
-GHOST_COL      equ $FD4B
-GHOST_CHAR     equ $FD4C  ; ตัวเดิมในช่องที่ BIOS วาดตัวหลอกทับ -- เขียนคืนตอน resync
-MARK_ROW       equ $FD4D  ; แถวของตัวที่สระ/วรรณยุกต์จะไปเกาะ (อาจเป็นแถวก่อนหน้าถ้าเพิ่งต่อแถว)
-DC_ROW         equ $FD4E  ; แถวที่ DELCOL/INSCOL กำลังทำงาน
-RB_M           equ $FD4F  ; แถวที่กด Enter (INLIN_REBUILD)
-IC_CARRY       equ $FD51  ; 3 ไบต์ ($FD51-$FD53): ตัวที่ล้นจากคอลัมน์สุดท้ายตอนแทรก (บน/กลาง/ล่าง)
-LT_TMP         equ $FD54  ; 1 ไบต์ scratch ของ LT_SET
-THAI_INS       equ $FD50  ; โหมด INS ของเราเอง ขณะ PRINTON (ดู CHGE_HOOK) -- BIOS เห็น INSFLG=0 ตลอด
+WRAP_PENDING   equ $FD48-SLTWRK_OLD  ; 1 ไบต์: เพิ่งพิมพ์ตัวปกติลงคอลัมน์สุดท้าย -> BIOS จะตัดขึ้นแถวถัดไป (แถว+1)
+GHOST_PENDING  equ $FD49-SLTWRK_OLD  ; 1 ไบต์: วาดสระของตัวคอลัมน์สุดท้ายเอง แล้วปล่อย BIOS วาดตัวหลอกที่ cursor
+GHOST_ROW      equ $FD4A-SLTWRK_OLD
+GHOST_COL      equ $FD4B-SLTWRK_OLD
+GHOST_CHAR     equ $FD4C-SLTWRK_OLD  ; ตัวเดิมในช่องที่ BIOS วาดตัวหลอกทับ -- เขียนคืนตอน resync
+MARK_ROW       equ $FD4D-SLTWRK_OLD  ; แถวของตัวที่สระ/วรรณยุกต์จะไปเกาะ (อาจเป็นแถวก่อนหน้าถ้าเพิ่งต่อแถว)
+DC_ROW         equ $FD4E-SLTWRK_OLD  ; แถวที่ DELCOL/INSCOL กำลังทำงาน
+RB_M           equ $FD4F-SLTWRK_OLD  ; แถวที่กด Enter (INLIN_REBUILD)
+IC_CARRY       equ $FD51-SLTWRK_OLD  ; 3 ไบต์ ($FD51-$FD53): ตัวที่ล้นจากคอลัมน์สุดท้ายตอนแทรก (บน/กลาง/ล่าง)
+LT_TMP         equ $FD54-SLTWRK_OLD  ; 1 ไบต์ scratch ของ LT_SET
+BLINK_CNT      equ $FD55-SLTWRK_OLD  ; 9.26: ตัวนับ frame ของการกระพริบ cursor ภาษาไทย
+BLINK_OFF      equ $FD56-SLTWRK_OLD  ; 9.26: 1 = ตอนนี้ glyph 255 เป็นตัวปกติ (cursor "ดับ")
+PREV_TIMI      equ $FD57-SLTWRK_OLD  ; 9.26: 5 ไบต์ ($FD57-$FD5B) hook H.TIMI เดิม -- ต้องเรียกต่อเสมอ (disk ROM ใช้)
+THAI_INS       equ $FD50-SLTWRK_OLD  ; โหมด INS ของเราเอง ขณะ PRINTON (ดู CHGE_HOOK) -- BIOS เห็น INSFLG=0 ตลอด
 ; LINTTB marker: ค่าไม่เป็น 0 (BIOS ถือว่า "ไม่ต่อแถว") แต่เราใช้บอกว่าแถวข้อความนี้ต่อไป/ต่อมาจากแถว
 ; ข้อความที่ห่าง 3 แถว (ข้ามแถวสระล่าง+สระบน) -- ค่าใน LINTTB เลื่อนตามเวลา BIOS scroll จอเอง
 LT_MARK        equ $50
@@ -272,7 +288,7 @@ SLTTBL      equ $FCC5   ; ตาราง readback ของ secondary slot ป�
                         ; (4 ไบต์, = EXPTBL+4 เสมอ) -- ยืนยันจาก MSX2 Technical Handbook
                         ; (Konamiman's MSX2 Technical Handbook, Chapter 5B) และตัวอย่าง GETSLT
                         ; มาตรฐานที่ map.grauw.nl (MSX Assembly Page)
-MY_SLOT_ID     equ $FD10  ; 1 ไบต์ (ย้ายจาก $FD0E เดิม เพราะ PREV_KEYC ขยายเป็น 5 ไบต์แล้วชนพื้นที่
+MY_SLOT_ID     equ $FD10-SLTWRK_OLD  ; 1 ไบต์ (ย้ายจาก $FD0E เดิม เพราะ PREV_KEYC ขยายเป็น 5 ไบต์แล้วชนพื้นที่
                           ; เดิม): slot ID (รูปแบบเดียวกับที่ RDSLT/ENASLT ใช้) ของ cartridge นี้เอง
                           ; -- คำนวณครั้งเดียวตอน KEYC_INSTALL (ตอนนั้น page 1 คือ slot ของเราแน่นอน
                           ; เพราะ BASIC เพิ่งเรียกเข้ามาทาง STATEMENT/CALL THAION) ใช้เป็น byte ที่ 2
@@ -280,7 +296,6 @@ MY_SLOT_ID     equ $FD10  ; 1 ไบต์ (ย้ายจาก $FD0E เด�
 ; SAVED_P1_SLOT: RST 30H/CALLF จัดการ save/restore slot ของ page 1 ให้เองภายในตัว (ดูเหตุผลด้านบน)
 ; ไม่จำเป็นสำหรับกลไกใหม่แล้ว -- equate นี้เหลือไว้แค่เพราะ KEYC_TRAMPOLINE_SRC (dead code เดิม, ดู
 ; ด้านล่าง) ยังอ้างถึงอยู่ -- ย้ายไปใช้ RAM ที่ไม่ชนกับ PREV_KEYC 5 ไบต์ใหม่/MY_SLOT_ID
-SAVED_P1_SLOT  equ $FD8A  ; RAM ว่าง (ไม่ชนกับ PREV_KEYC $FD0B-$FD0F, MY_SLOT_ID $FD10, PROCNM
                           ; $FD89 ตัวเดียว) -- ใช้แค่ให้ dead code เดิมคอมไพล์ผ่าน ไม่ได้ถูกเรียกจริง
 ;
 ; KEYC_TRAMPOLINE เดิม ($FD10-$FD5A เดิม -- ย้ายไปที่อื่นแล้วเพราะ MY_SLOT_ID ใหม่ใช้ $FD10) เลิกใช้แล้วเช่นกัน (ไม่มี RAM trampoline อีกต่อไป เพราะ

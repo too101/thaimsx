@@ -419,7 +419,7 @@ KEYC_THAI_TABLE_N equ $30  ; ตาราง Thai unshifted/shifted ครอบ
 ; เดิม (scan code) ทำให้ BIOS's เดินตาราง dispatch ของมันเองแบบ default (เหมือนไม่มี hook เลย) ซึ่ง
 ; ทำหน้าที่แทน "ปล่อยผ่าน" โดยธรรมชาติ (ไม่มี PREV_KEYC ให้ chain หาอีกต่อไปในเส้นทางนี้ -- PREV_KEYC
 ; ใช้แค่ตอน KEYC_UNINSTALL คืนค่า H_KEYC ตอน THAIOFF เท่านั้น)
-KEYC_HOOK_REAL:
+KEYC_BODY:
 	push hl
 	ld a,c
 	cp KEYC_TOGGLE_CODE
@@ -431,7 +431,7 @@ KEYC_HOOK_REAL:
 	cp KEY_DEL_SCAN
 	jr nz,.not_bsdel
 .bsdel:
-	ld a,(INLIN_ACTIVE)
+	ld a,(ix+INLIN_ACTIVE)
 	or a
 	jr z,.not_bsdel
 	ld a,(SHIFT_STATE)
@@ -448,10 +448,10 @@ KEYC_HOOK_REAL:
 .not_bsdel:
 
 	; --- ส่วนที่ 2: พิมพ์อักษรไทยแบบเรียบ (ดูหัวข้อ 5) ---
-	ld a,(THAI_MODE)
+	ld a,(ix+THAI_MODE)
 	or a
 	jr z,.passthrough          ; cartridge ยังไม่ได้ THAION -- ปล่อยผ่านตามปกติ
-	ld a,(INPUT_MODE)
+	ld a,(ix+INPUT_MODE)
 	or a
 	jr z,.passthrough          ; ผู้ใช้ปิดโหมดประกอบอักษร (INPUTOFF/ยังไม่ toggle) -- ปล่อยผ่าน
 	; *** บั๊กจริงข้อ 9 (แก้แล้ว) + บั๊กจริงข้อ 11 (แก้แล้ว, แทนที่ตรรกะเช็ค SHIFT_STATE เดิมทั้งหมด) ***
@@ -505,9 +505,9 @@ KEYC_HOOK_REAL:
 .toggle:
 	pop hl                    ; *** ต้องคืน HL ให้ตรงเดิมเสมอ แม้แต่ในสาขานี้ -- ดูบั๊กจริงข้อ 1
 	; ต่อจากนี้ห้ามใช้ HL อีกเด็ดขาด ใช้ absolute addressing ล้วน ๆ แทน (LD A,(nn)/LD (nn),A)
-	ld a,(INPUT_MODE)
+	ld a,(ix+INPUT_MODE)
 	cpl
-	ld (INPUT_MODE),a
+	ld (ix+INPUT_MODE),a
 	ld b,a                    ; B = ค่า flag ใหม่หลัง toggle (เอาไว้ผสม bit7 ด้านล่าง)
 	; เสียง/LED click แบบเดียวกับต้นฉบับ (มาตรฐาน PSG port, portable ทุก generation)
 	ld a,15
@@ -526,82 +526,6 @@ KEYC_HOOK_REAL:
 	scf                       ; carry=1 = "จัดการคีย์นี้แล้ว"
 	ret
 
-; *** DEAD CODE ตั้งแต่ "การออกแบบใหม่ (RST 30H)" (ดู comment เต็มที่ KEYC_INSTALL ด้านล่าง) ***
-; ไม่มีใครเรียก KEYC_TRAMPOLINE_SRC/KEYC_TRAMPOLINE อีกต่อไป -- เก็บไว้เฉย ๆ เผื่อย้อนกลับ/อ้างอิง
-; ---- KEYC_TRAMPOLINE_SRC -- ต้นฉบับใน ROM ของ trampoline (ดูบั๊กจริงข้อ 7 หัวข้อ 4 ด้านบน) --
-; ถูกคัดลอก (LDIR) ไปไว้ที่ KEYC_TRAMPOLINE (RAM, page 3, $FD10 -- ดู equates.asm) ตอน
-; KEYC_INSTALL แล้ว H_KEYC จะชี้มาที่นี่แทน -- โค้ดตรงนี้เองต้องรันได้ "ก่อน" page 1 จะถูกสลับมา
-; เป็น slot ของเราเองด้วยซ้ำ จึงห้ามเรียกโค้ด/อ่านข้อมูลใด ๆ ที่อยู่ใน page 1 (0x4000-0x7FFF)
-; ก่อนขั้นตอนสลับ slot จะเสร็จเด็ดขาด (นี่คือเหตุผลที่ logic หา slot ปัจจุบันของ page 1 เขียนสด
-; อยู่ตรงนี้เลยแทนที่จะเรียก GET_MY_SLOT ที่อยู่ ROM -- ดู comment ด้านล่าง)
-KEYC_TRAMPOLINE_SRC:
-	di                         ; ปิด interrupt ตลอดช่วงสลับ slot (ดูเหตุผลเต็มในหัวข้อ 4 บั๊กข้อ 7)
-	push hl
-	push bc
-	push de
-	; หา slot ปัจจุบันของ page 1 (ไม่ว่าใครอยู่ตอนนี้) -- เขียน logic ของ GET_MY_SLOT ซ้ำสด ๆ
-	; ตรงนี้ (ไม่เรียก CALL GET_MY_SLOT ที่อยู่ ROM) เพราะ ROM ของเรายังเข้าถึงไม่ได้แน่นอน ณ
-	; จุดนี้ -- อ้างอิงตัวอย่าง GETSLT มาตรฐาน (map.grauw.nl) + MSX2 Technical Handbook Ch.5B
-	call RSLREG
-	rrca
-	rrca
-	and 3
-	ld c,a
-	ld b,0
-	ld hl,EXPTBL
-	add hl,bc
-	ld a,(hl)
-	and $80
-	or c
-	jp p,.notexp
-	ld c,a
-	inc hl
-	inc hl
-	inc hl
-	inc hl
-	ld a,(hl)
-	and $0C
-	or c
-.notexp:
-	ld (SAVED_P1_SLOT),a       ; เก็บ slot เดิมของ page 1 ไว้คืนทีหลัง
-	ld a,(MY_SLOT_ID)
-	ld hl,$4000
-	call ENASLT                ; สลับ page 1 -> slot ของ cartridge นี้เอง (official BIOS entry)
-	pop de
-	pop bc
-	pop hl                     ; คืนค่า HL/BC/DE เดิมจากผู้เรียก (โดยเฉพาะ C=scan code ที่
-	                           ; KEYC_HOOK_REAL ต้องใช้ และ HL ที่ต้องคืนให้ BIOS caller เป๊ะ)
-	call KEYC_HOOK_REAL         ; ตอนนี้ page 1 = เราแล้วจริง ๆ เรียกโค้ดจริงได้ปลอดภัย
-	push af                     ; เก็บผลลัพธ์ (carry flag) ไว้ก่อนสลับ slot กลับ
-	push hl                     ; เก็บ HL ที่ KEYC_HOOK_REAL คืนมาไว้ด้วย (บั๊กจริงข้อ 1)
-	push bc                     ; เก็บ BC ไว้ด้วย -- บั๊กจริงข้อ 8: C คือ scan code เดิมที่ PREV_KEYC
-	push de                     ; (เส้นทาง passthrough) ต้องได้รับต่อ ห้ามหายระหว่างนี้เด็ดขาด
-	ld a,(SAVED_P1_SLOT)
-	ld hl,$4000
-	call ENASLT                  ; สลับ page 1 กลับที่เดิมเสมอ -- ไม่ว่า carry จะเป็นอะไรก็ตาม
-	                              ; *** บั๊กจริงข้อ 8: ENASLT เอง (path expanded slot, ดู 0x026b ใน
-	                              ; BIOS จริง) ใช้ BC เป็น scratch ภายใน (LD C,A / LD B,0) และอ่าน D
-	                              ; ด้วย -- ถ้าไม่ push/pop BC,DE ครอบ CALL นี้ (เหมือนที่ครอบ ENASLT
-	                              ; ตัวแรกไว้แล้วด้านบนด้วย push bc/push de/pop de/pop bc) ค่า C จะถูก
-	                              ; ทับตอน page 1 เป็น slot ที่ expand (secondary slot) ทำให้ PREV_KEYC
-	                              ; ได้ scan code ผิด กลายเป็นตัวอักษรเพี้ยน/หายตอนพิมพ์ (ตามที่ผู้ใช้
-	                              ; รายงานบน real hardware: "no character show, cursor toggle ทุกครั้ง
-	                              ; ที่กดปุ่ม") -- ไม่เกิดกับ MSX1 BIOS แบบ slot 0 ไม่ expand เพราะ path
-	                              ; นั้นของ ENASLT ไม่แตะ BC เลย (แค่ AND C/OR B อ่านอย่างเดียว)
-	pop de
-	pop bc
-	pop hl
-	pop af
-	jr c,.handled
-	ei
-	jp PREV_KEYC                  ; passthrough: page 1 คืนที่เดิมแล้ว ปลอดภัยที่จะกระโดดเข้า
-	                              ; โค้ดเดิม (อาจอยู่ slot ไหนก็ได้ ไม่ใช่ปัญหาของเราอีกต่อไป)
-.handled:
-	pop af                        ; ทิ้ง return address ชั้นในของ BIOS (0x1028) -- ข้าม post-
-	                              ; dispatch table walk (บั๊กจริงข้อ 5)
-	ei
-	ret
-KEYC_TRAMPOLINE_END:
 
 ; GET_MY_SLOT -- หา slot ID ของ cartridge นี้เอง (ใช้จาก KEYC_INSTALL เท่านั้น ตอนนั้น page 1
 ; คือ ROM ของเราแน่นอนอยู่แล้ว เพราะกำลังรันมาจาก CALL THAION -- logic เดียวกับที่ฝังซ้ำไว้ใน
@@ -661,18 +585,18 @@ GET_MY_SLOT:
 KEYC_INSTALL:
 	di
 	call GET_MY_SLOT
-	ld (MY_SLOT_ID),a
+	ld (ix+MY_SLOT_ID),a
 	ld a,(H_KEYC)              ; สำรองเนื้อ hook slot เดิมทั้ง 5 ไบต์ไว้ก่อนเสมอ
-	ld (PREV_KEYC),a
+	ld (ix+PREV_KEYC),a
 	ld a,(H_KEYC+1)
-	ld (PREV_KEYC+1),a
+	ld (ix+PREV_KEYC+1),a
 	ld a,(H_KEYC+2)
-	ld (PREV_KEYC+2),a
+	ld (ix+PREV_KEYC+2),a
 	ld a,(H_KEYC+3)
-	ld (PREV_KEYC+3),a
+	ld (ix+PREV_KEYC+3),a
 	ld a,(H_KEYC+4)
-	ld (PREV_KEYC+4),a
-	ld a,(MY_SLOT_ID)
+	ld (ix+PREV_KEYC+4),a
+	ld a,(ix+MY_SLOT_ID)
 	ld (H_KEYC+1),a            ; เขียน slot byte ก่อน
 	ld hl,KEYC_HOOK_REAL
 	ld (H_KEYC+2),hl           ; addr_lo/addr_hi (16-bit store เดียว -- L->+2, H->+3)
@@ -685,15 +609,15 @@ KEYC_INSTALL:
 
 KEYC_UNINSTALL:
 	di
-	ld a,(PREV_KEYC)
+	ld a,(ix+PREV_KEYC)
 	ld (H_KEYC),a              ; คืน opcode เดิมก่อน (ปลอดภัยทันทีไม่ว่าไบต์ที่เหลือจะยังไม่ทันคืน)
-	ld a,(PREV_KEYC+1)
+	ld a,(ix+PREV_KEYC+1)
 	ld (H_KEYC+1),a
-	ld a,(PREV_KEYC+2)
+	ld a,(ix+PREV_KEYC+2)
 	ld (H_KEYC+2),a
-	ld a,(PREV_KEYC+3)
+	ld a,(ix+PREV_KEYC+3)
 	ld (H_KEYC+3),a
-	ld a,(PREV_KEYC+4)
+	ld a,(ix+PREV_KEYC+4)
 	ld (H_KEYC+4),a
 	ei
 	ret

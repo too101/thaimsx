@@ -49,20 +49,20 @@ CMDTAB:
 
 CMD_PRINTON:
 	pop hl
-	ld a,(PLOCK_MODE)
+	ld a,(ix+PLOCK_MODE)
 	or a
 	jp nz,STMT_DONE          ; ถูกล็อกอยู่ -- ไม่ทำอะไร แต่ถือว่า "จัดการแล้ว"
 	ld a,TRUE
-	ld (PRINT_MODE),a
+	ld (ix+PRINT_MODE),a
 	jp STMT_DONE
 
 CMD_PRINTOFF:
 	pop hl
-	ld a,(PLOCK_MODE)
+	ld a,(ix+PLOCK_MODE)
 	or a
 	jp nz,STMT_DONE
 	xor a
-	ld (PRINT_MODE),a
+	ld (ix+PRINT_MODE),a
 	; เปิด blinking-cursor กลับ (PRINTHOOK ปิดไว้ตอน PRINTON -- ดู comment เต็มที่
 	; CURSOR_BLINK_FLAG ใน equates.asm)
 	ld a,TRUE
@@ -72,25 +72,25 @@ CMD_PRINTOFF:
 CMD_INPUTON:
 	pop hl
 	ld a,TRUE
-	ld (INPUT_MODE),a
+	ld (ix+INPUT_MODE),a
 	jp STMT_DONE
 
 CMD_INPUTOFF:
 	pop hl
 	xor a
-	ld (INPUT_MODE),a
+	ld (ix+INPUT_MODE),a
 	jp STMT_DONE
 
 CMD_PLOCKON:
 	pop hl
 	ld a,TRUE
-	ld (PLOCK_MODE),a
+	ld (ix+PLOCK_MODE),a
 	jp STMT_DONE
 
 CMD_PLOCKOFF:
 	pop hl
 	xor a
-	ld (PLOCK_MODE),a
+	ld (ix+PLOCK_MODE),a
 	jp STMT_DONE
 
 ; --- THAION / THAIOFF ------------------------------------------------------
@@ -120,7 +120,7 @@ CMD_THAION:
 ; THAION_CORE (9.22): งานของ THAION ทั้งหมด แยกออกมาให้ BOOT_HOOK เรียกตอนบูตได้ด้วย -- ทำลายทุก register
 THAION_CORE:
 	ld a,TRUE
-	ld (THAI_MODE),a
+	ld (ix+THAI_MODE),a
 	; DI/EI รอบ LDIRVM: เก็บไว้เป็น defensive practice (กัน interrupt แทรกกลางการ copy
 	; VRAM 2040 ไบต์) *** แก้ข้อมูลที่เข้าใจผิดไว้ก่อนหน้า: diff 862/2040 ไบต์ที่เจอตอนแรก
 	; ไม่ได้เกิดจากปัญหานี้จริง ๆ -- พิสูจน์แล้วว่าเป็น test-script อ่าน VRAM เร็วเกินไป (อ่านก่อน
@@ -160,10 +160,10 @@ CMD_THAIOFF:
 	pop hl
 	push hl
 	xor a
-	ld (THAI_MODE),a
-	ld (PRINT_MODE),a
-	ld (INPUT_MODE),a
-	ld (PLOCK_MODE),a
+	ld (ix+THAI_MODE),a
+	ld (ix+PRINT_MODE),a
+	ld (ix+INPUT_MODE),a
+	ld (ix+PLOCK_MODE),a
 	; เปิด blinking-cursor กลับด้วย เผื่อ PRINTON ยังเปิดค้างอยู่ตอนสั่ง THAIOFF (ดู comment
 	; เต็มที่ CURSOR_BLINK_FLAG ใน equates.asm)
 	ld a,TRUE

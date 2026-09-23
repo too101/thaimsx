@@ -8,7 +8,7 @@ after time 13.15 { kpush [rep {0xCA 0xC7 0xD1 0xCA 0xB4 0xD5} 1] }
 after time 13.3 { kpush [rep {0xCA 0xC7 0xD1 0xCA 0xB4 0xD5} 5] }
 after time 13.6 { kpush [concat [rep {0xBB 0xD9 0xE8} 8] [str2b "\";i:next\r"]] }
 after time 14.5 {
-  debug set_bp 0x4EBC {[pc_in_slot 1]} { if {[rd 0xFD48]} { log "WRAP_FIX: CSRY=[rd 0xF3DC] CSRX=[rd 0xF3DD] PR=[rd 0xFD18] LT10-23=[lt]" } }
+  debug set_bp 0x4EBC {[pc_in_slot 1]} { if {[wv 0xFD48]} { log "WRAP_FIX: CSRY=[rd 0xF3DC] CSRX=[rd 0xF3DD] PR=[wv 0xFD18] LT10-23=[lt]" } }
   debug set_bp 0x4E58 {[pc_in_slot 1]} { log "LINK_NEXT A=[reg A] CSRY=[rd 0xF3DC]"; if {[reg A]==22} { show L } }
   kstr "cls:run\r"
 }

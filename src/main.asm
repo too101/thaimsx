@@ -14,6 +14,7 @@
 	dw 0            ; DEVICE vector -- ไม่ใช้
 	dw 0            ; TEXT vector -- ไม่ใช้
 
+	include "src/workram.asm"
 	include "src/init.asm"
 	include "src/statement.asm"
 	include "src/thaicmd.asm"

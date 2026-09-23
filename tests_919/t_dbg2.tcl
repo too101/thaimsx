@@ -7,7 +7,7 @@ proc show {tag} {
         set s [string trimright $s]; if {$s ne ""} { log "$tag R[format %02d $r] |$s" }
     }
     set lt {}; for {set r 1} {$r<=24} {incr r} { lappend lt [format %02X [rd [expr {0xFBB1+$r}]]] }
-    log "$tag LINTTB $lt  CSRY=[rd 0xF3DC] CSRX=[rd 0xF3DD] PRINT_ROW=[rd 0xFD18] WRAP=[rd 0xFD48]"
+    log "$tag LINTTB $lt  CSRY=[rd 0xF3DC] CSRX=[rd 0xF3DD] PRINT_ROW=[wv 0xFD18] WRAP=[wv 0xFD48]"
 }
 after time 12 { kstr "call printon\r" }
 after time 13 { kpush [concat [str2b "10 print \""] [rep {0xA1} 26]] }

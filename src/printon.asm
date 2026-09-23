@@ -64,18 +64,18 @@
 PRINTHOOK_INSTALL:
 	di
 	xor a
-	ld (PRINT_REDIRECT),a      ; เริ่มต้นสภาวะ clean เสมอ (กัน state ค้างจาก THAION รอบก่อน)
+	ld (ix+PRINT_REDIRECT),a      ; เริ่มต้นสภาวะ clean เสมอ (กัน state ค้างจาก THAION รอบก่อน)
 	ld a,(H_CHPUT)
-	ld (PREV_CHPUT),a
+	ld (ix+PREV_CHPUT),a
 	ld a,(H_CHPUT+1)
-	ld (PREV_CHPUT+1),a
+	ld (ix+PREV_CHPUT+1),a
 	ld a,(H_CHPUT+2)
-	ld (PREV_CHPUT+2),a
+	ld (ix+PREV_CHPUT+2),a
 	ld a,(H_CHPUT+3)
-	ld (PREV_CHPUT+3),a
+	ld (ix+PREV_CHPUT+3),a
 	ld a,(H_CHPUT+4)
-	ld (PREV_CHPUT+4),a
-	ld a,(MY_SLOT_ID)          ; คำนวณไว้แล้วโดย KEYC_INSTALL ที่เรียกก่อนหน้านี้เสมอ
+	ld (ix+PREV_CHPUT+4),a
+	ld a,(ix+MY_SLOT_ID)          ; คำนวณไว้แล้วโดย KEYC_INSTALL ที่เรียกก่อนหน้านี้เสมอ
 	ld (H_CHPUT+1),a
 	ld hl,PRINTHOOK
 	ld (H_CHPUT+2),hl
@@ -85,71 +85,91 @@ PRINTHOOK_INSTALL:
 	ld (H_CHPUT),a
 	; --- 9.19: hook เพิ่ม 3 ตัว (ดู INLIN_REBUILD / CHGE_HOOK ด้านล่าง) ---
 	xor a
-	ld (INLIN_ACTIVE),a
+	ld (ix+INLIN_ACTIVE),a
 	ld hl,H_CHGE
 	ld de,PREV_CHGE
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,CHGE_HOOK
 	call HOOK_INSTALL
 	ld hl,H_PINL
 	ld de,PREV_PINL
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,INLIN_HOOK
 	call HOOK_INSTALL
 	ld hl,H_INLI
 	ld de,PREV_INLI
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,INLIN_HOOK
 	call HOOK_INSTALL
 	; --- 9.21: cursor แยกสถานะไทย/อังกฤษ ---
 	xor a
-	ld (IN_CHGET),a
-	ld (CUR_WAITING),a
-	ld (CUR_ACTIVE),a
+	ld (ix+IN_CHGET),a
+	ld (ix+CUR_WAITING),a
+	ld (ix+BLINK_OFF),a
 	ld hl,H_DSPC
 	ld de,PREV_DSPC
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,DSPC_HOOK
 	call HOOK_INSTALL
 	ld hl,H_ERAC
 	ld de,PREV_ERAC
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,ERAC_HOOK
+	call HOOK_INSTALL
+	ld hl,H_TIMI                  ; 9.26: กระพริบ cursor ภาษาไทย (ส่งต่อ hook เดิมเสมอ)
+	ld de,PREV_TIMI
+	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
+	ld bc,TIMI_HOOK
 	call HOOK_INSTALL
 	ei
 	ret
 
 PRINTHOOK_UNINSTALL:
 	di
-	ld a,(PREV_CHPUT)
+	ld a,(ix+PREV_CHPUT)
 	ld (H_CHPUT),a
-	ld a,(PREV_CHPUT+1)
+	ld a,(ix+PREV_CHPUT+1)
 	ld (H_CHPUT+1),a
-	ld a,(PREV_CHPUT+2)
+	ld a,(ix+PREV_CHPUT+2)
 	ld (H_CHPUT+2),a
-	ld a,(PREV_CHPUT+3)
+	ld a,(ix+PREV_CHPUT+3)
 	ld (H_CHPUT+3),a
-	ld a,(PREV_CHPUT+4)
+	ld a,(ix+PREV_CHPUT+4)
 	ld (H_CHPUT+4),a
 	; --- 9.19: คืน hook 3 ตัวที่ติดตั้งเพิ่ม (ldir คืนไบต์ opcode ตัวแรกก่อนเสมอ ตามกติกาเดิม) ---
 	ld hl,PREV_CHGE
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_CHGE
 	ld bc,5
 	ldir
 	ld hl,PREV_PINL
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_PINL
 	ld bc,5
 	ldir
 	ld hl,PREV_INLI
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_INLI
 	ld bc,5
 	ldir
 	ld hl,PREV_DSPC
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_DSPC
 	ld bc,5
 	ldir
 	ld hl,PREV_ERAC
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_ERAC
 	ld bc,5
 	ldir
+	ld hl,PREV_TIMI
+	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
+	ld de,H_TIMI
+	ld bc,5
+	ldir
 	xor a
-	ld (INLIN_ACTIVE),a
-	ld (CUR_WAITING),a
+	ld (ix+INLIN_ACTIVE),a
+	ld (ix+CUR_WAITING),a
 	ei
 	ret
 
@@ -167,7 +187,7 @@ HOOK_INSTALL:
 	pop hl
 	push hl
 	inc hl
-	ld a,(MY_SLOT_ID)
+	ld a,(ix+MY_SLOT_ID)
 	ld (hl),a
 	inc hl
 	ld (hl),c
@@ -183,12 +203,12 @@ HOOK_INSTALL:
 ; ติดตั้งที่ทั้ง H_PINL และ H_INLI -- BIOS เรียกตอนเริ่มรับบรรทัดทุกแบบ (direct mode/โปรแกรม,
 ; INPUT, LINE INPUT) แค่ตั้ง flag ว่า "กำลังรับบรรทัด" (เฉพาะตอน PRINTON เปิด) ให้ PRINTHOOK รู้ว่า
 ; LF ตัวถัดไปคือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดจากจอเข้า BUF เสร็จแล้ว (ดู INLIN_REBUILD)
-INLIN_HOOK:
+INLIN_BODY:
 	push af
-	ld a,(PRINT_MODE)
-	ld (INLIN_ACTIVE),a
+	ld a,(ix+PRINT_MODE)
+	ld (ix+INLIN_ACTIVE),a
 	xor a
-	ld (THAI_INS),a               ; 9.25: เริ่มบรรทัดใหม่ = ไม่อยู่โหมด INS (เหมือน BIOS)
+	ld (ix+THAI_INS),a               ; 9.25: เริ่มบรรทัดใหม่ = ไม่อยู่โหมด INS (เหมือน BIOS)
 	pop af
 	ret
 
@@ -199,22 +219,22 @@ INLIN_HOOK:
 ; กด Enter เป็นสระ/วรรณยุกต์ CSRY ยังค้างอยู่แถวบน/ล่าง ตอน BIOS อ่านบรรทัด (Enter ไม่ผ่าน CHPUT
 ; ก่อนอ่าน) BIOS จะอ่านแถวผิดไปทั้งบรรทัด และ cursor กระพริบผิดแถว -- แก้โดย resync ที่นี่ด้วย
 ; (+ แก้ glyph ผสมที่ค้างไว้ทันที ไม่ต้องรอคีย์ถัดไปแบบข้อจำกัดเดิมใน 9.18)
-CHGE_HOOK:
+CHGE_BODY:
 	push hl
 	push de
 	push bc
 	push af
 	ld a,TRUE
-	ld (IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
+	ld (ix+IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
 	call FONT_CHECK               ; 9.23: SCREEN/WIDTH โหลดฟอนต์ระบบทับ -> ใส่ฟอนต์ไทยคืน
-	ld a,(PRINT_MODE)
+	ld a,(ix+PRINT_MODE)
 	or a
 	jr z,.chge_done
 	call PRINT_RESYNC
 	; 9.25: รับโหมด INS มาทำเอง -- BIOS กลับค่า INSFLG ตอนกดปุ่ม INS ($24E5) เราเห็นตรงนี้ (ก่อนรอคีย์
 	; ถัดไป) แล้วสลับ THAI_INS แทน ตั้ง INSFLG กลับเป็น 0 ให้ BIOS พิมพ์ทับเสมอ (ไม่เลื่อนแถวกลางเอง
 	; ซึ่งไม่รู้จักแถวสระบน/ล่างและการต่อแถว 3 ชั้น) -- เราเลื่อนเองใน INSCOL ตอน CHPUT
-	ld a,(INLIN_ACTIVE)
+	ld a,(ix+INLIN_ACTIVE)
 	or a
 	jr z,.chge_done
 	ld a,(INSFLG)
@@ -222,9 +242,9 @@ CHGE_HOOK:
 	jr z,.chge_done
 	xor a
 	ld (INSFLG),a
-	ld a,(THAI_INS)
+	ld a,(ix+THAI_INS)
 	cpl
-	ld (THAI_INS),a
+	ld (ix+THAI_INS),a
 	ld (CSTYLE),a                 ; รูป cursor: INS = ขีดล่าง (หรือแถบซ้ายตอนภาษาไทย)
 .chge_done:
 	pop af
@@ -238,19 +258,19 @@ CHGE_HOOK:
 ; ถ้ามี glyph ผสมค้างอยู่ (PRINT_COMBINE_PENDING) เขียนทับลง VRAM แล้วเคลียร์ flag
 ; ทำลาย A/DE/HL (BC คงเดิม)
 COMBINE_FIX:
-	ld a,(PRINT_COMBINE_PENDING)
+	ld a,(ix+PRINT_COMBINE_PENDING)
 	or a
 	ret z
 	xor a
-	ld (PRINT_COMBINE_PENDING),a
+	ld (ix+PRINT_COMBINE_PENDING),a
 	push bc
-	ld a,(PRINT_COMBINE_ROW)
+	ld a,(ix+PRINT_COMBINE_ROW)
 	ld d,a
-	ld a,(PRINT_COMBINE_COL)
+	ld a,(ix+PRINT_COMBINE_COL)
 	ld e,a
 	ld a,d
 	call NAMETAB_ADDR
-	ld a,(PRINT_COMBINE_CODE)
+	ld a,(ix+PRINT_COMBINE_CODE)
 	call WRTVRM
 	pop bc
 	ret
@@ -270,21 +290,21 @@ COMBINE_FIX:
 ;       (มีแค่ D ที่ NAMETAB_ADDR เซ็ตเป็น 0 เป็นผลข้างเคียง)
 ;   D = scratch อิสระตลอด (ไม่มีความหมาย "depth" อีกต่อไป -- รอบแรกเคยใช้เก็บ depth 1/2
 ;       แต่แก้เป็นระบบ "ผสม glyph เดียว" แล้ว ไม่ต้องมี 2 ระดับแยกอีก ดู comment ใหญ่บนสุดไฟล์)
-PRINTHOOK:
+PRINTHOOK_BODY:
 	push hl
 	push de
 	push bc
 	push af
 	xor a
-	ld (IN_CHGET),a               ; 9.21: cursor ที่ CHPUT วาด (ถ้ามี) ไม่ใช่ cursor รอคีย์
+	ld (ix+IN_CHGET),a               ; 9.21: cursor ที่ CHPUT วาด (ถ้ามี) ไม่ใช่ cursor รอคีย์
 	pop af
 	push af
 	cp $80
 	call nc,FONT_CHECK            ; 9.23: จะพิมพ์อักษรไทย -- เช็คว่าฟอนต์ไทยยังอยู่ใน VRAM
-	ld a,(PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
+	ld a,(ix+PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
-	ld a,(PRINT_MODE)
+	ld a,(ix+PRINT_MODE)
 	or a
 	jp z,.done                 ; PRINTON ยังไม่เปิด -- ปล่อยผ่าน ไม่ทำอะไรเลย (jp เพราะ .done
 	                           ; อยู่ไกลเกิน range ของ jr แล้วหลังจากฟังก์ชันขยายใหญ่ขึ้น)
@@ -303,19 +323,19 @@ PRINTHOOK:
 	jr .after_resync
 
 	; --- ขั้น 1: sync CSRY แถวจริง (คืนค่าจากรอบก่อนถ้าเคยยักย้ายไว้) ---
-	ld a,(PRINT_REDIRECT)             ; (โค้ดเดิม -- ข้ามแล้ว ดู PRINT_RESYNC)
+	ld a,(ix+PRINT_REDIRECT)             ; (โค้ดเดิม -- ข้ามแล้ว ดู PRINT_RESYNC)
 	or a
 	jr z,.refresh_shadow
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	ld (CSRY),a
 	xor a
-	ld (PRINT_REDIRECT),a
+	ld (ix+PRINT_REDIRECT),a
 	jr .classify
 .refresh_shadow:
 	; รอบก่อนเป็นตัวอักษรปกติ (ไม่ได้ยักย้าย) -- CSRY ตอนนี้ถูกต้องอยู่แล้ว รีเฟรช
 	; เงาไว้เผื่อรอบนี้ต้องยักย้าย
 	ld a,(CSRY)
-	ld (PRINT_ROW),a
+	ld (ix+PRINT_ROW),a
 
 .classify:
 	; --- ขั้น 1.6 (ใหม่): แก้ VRAM ค้างจากการ "ผสม" สระบน+วรรณยุกต์ของรอบก่อน (ถ้ามี) ---
@@ -338,21 +358,21 @@ PRINTHOOK:
 	ld a,c
 	cp 8                              ; BS?
 	jr nz,.notbs
-	ld a,(PRINT_LAST_MARK_VALID)
+	ld a,(ix+PRINT_LAST_MARK_VALID)
 	cp TRUE
 	jr nz,.notbs                      ; ไม่มีการผสมค้างให้ undo -- ปล่อยผ่าน BS ตามปกติ
 	                                  ; (9.20: ค่า 1 = เครื่องหมายเดี่ยว ใช้เฉพาะ BS ของตัวแก้ไขบรรทัด)
 	xor a
-	ld (PRINT_LAST_MARK_VALID),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
 	push bc
 	push de
-	ld a,(PRINT_LAST_MARK_ROW)
+	ld a,(ix+PRINT_LAST_MARK_ROW)
 	ld d,a
-	ld a,(PRINT_LAST_MARK_COL)
+	ld a,(ix+PRINT_LAST_MARK_COL)
 	ld e,a
 	ld a,d
 	call NAMETAB_ADDR
-	ld a,(PRINT_LAST_MARK_VOWEL)
+	ld a,(ix+PRINT_LAST_MARK_VOWEL)
 	call WRTVRM
 	pop de
 	pop bc
@@ -363,7 +383,7 @@ PRINTHOOK:
 	; ไม่ใช่ BS -- ปิดโอกาส undo ทิ้ง (ใช้ได้แค่ตัวถัดจากการผสมทันทีเท่านั้น ป้องกัน undo ผิดจังหวะ
 	; ถ้าผู้ใช้พิมพ์ตัวอื่นคั่นก่อนค่อยกด BS) -- กรณีนี้พิมพ์ตัวใหม่ไปแล้ว ไม่ผสม ไม่ต้อง undo
 	xor a
-	ld (PRINT_LAST_MARK_VALID),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
 
 	; --- ขั้น 1.5: LF (ขึ้นบรรทัดใหม่จริง) ตอน PRINTON ต้องเว้น 3 แถวจริงต่อบรรทัด
 	; ตรรกะ ไม่ใช่ 1 แถวแบบปกติ (ยืนยันจากผู้ใช้เอง: "24 บรรทัดจะเหลือ 8 บรรทัดโดยใช้ 3
@@ -380,14 +400,14 @@ PRINTHOOK:
 	; --- 9.19: LF นี้คือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดจากจอเข้า BUF เสร็จหรือไม่ (ดู INLIN_HOOK) ---
 	; ถ้าใช่ ประกอบ BUF ใหม่จากจอโดยรวมแถวบน/ล่างเข้าไปด้วย ก่อนโก่ง CSRY +2 ด้านล่าง (ตอนนี้ CSRY
 	; ยังอยู่ที่แถวของบรรทัดที่เพิ่งอ่านพอดี -- BIOS ย้าย cursor ไปท้ายบรรทัดด้วย ESC Y ก่อนพิมพ์ LF)
-	ld a,(INLIN_ACTIVE)
+	ld a,(ix+INLIN_ACTIVE)
 	or a
 	jr z,.lf_bump
 	xor a
-	ld (INLIN_ACTIVE),a
+	ld (ix+INLIN_ACTIVE),a
 	call INLIN_REBUILD
 .lf_bump:
-	ld a,(PRINT_MODE)
+	ld a,(ix+PRINT_MODE)
 	; หมายเหตุ: มาถึงจุดนี้ได้แปลว่า PRINT_MODE=TRUE แน่นอนอยู่แล้ว (เช็คตั้งแต่ต้น
 	; PRINTHOOK) แต่เช็คซ้ำเผื่อโค้ดข้างบนถูกแก้ในอนาคต -- ไม่เสียหาย
 	or a
@@ -409,15 +429,15 @@ PRINTHOOK:
 	call GET_BOTTOM
 	ld (CSRY),a
 	ld a,TRUE
-	ld (PRINT_IN_LF),a
+	ld (ix+PRINT_IN_LF),a
 .lf_scroll:
 	push bc
 	ld a,10
-	call CHPUT
+	call CHPUT_IX
 	pop bc
 	djnz .lf_scroll
 	xor a
-	ld (PRINT_IN_LF),a
+	ld (ix+PRINT_IN_LF),a
 	call GET_BOTTOM
 	sub 2
 	ld (CSRY),a
@@ -439,7 +459,7 @@ PRINTHOOK:
 	or a
 	jp nz,.done
 	xor a
-	ld (THAI_INS),a               ; ลูกศรยกเลิกโหมด INS (เหมือน BIOS $2428)
+	ld (ix+THAI_INS),a               ; ลูกศรยกเลิกโหมด INS (เหมือน BIOS $2428)
 	ld a,c
 	cp $1C
 	jr z,.ar_right
@@ -518,7 +538,7 @@ PRINTHOOK:
 	cp b
 	jp nz,.done
 	ld a,TRUE
-	ld (WRAP_PENDING),a
+	ld (ix+WRAP_PENDING),a
 	jp .done
 .is_mark:
 	ld b,a                       ; B = class (1/2/3) -- เก็บชั่วคราว
@@ -526,8 +546,8 @@ PRINTHOOK:
 	; --- ขั้น 3: คำนวณคอลัมน์เป้าหมาย E = CSRX-1 (คอลัมน์ของตัวก่อนหน้าที่เพิ่งวาด
 	; แล้ว cursor เลื่อนผ่านไปแล้ว) ---
 	; --- 9.25: หาช่องของตัวที่เครื่องหมายจะไปเกาะ (MARK_ROW, E) ---
-	ld a,(PRINT_ROW)
-	ld (MARK_ROW),a
+	ld a,(ix+PRINT_ROW)
+	ld (ix+MARK_ROW),a
 	ld a,(CSRX)
 	cp 2
 	jr c,.mk_wrapped
@@ -536,13 +556,13 @@ PRINTHOOK:
 	jr .mk_ok
 .mk_wrapped:
 	; ต้นแถว: ถ้าแถวนี้ต่อมาจากแถว-3 เครื่องหมายเป็นของตัวคอลัมน์สุดท้ายของแถวก่อน
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call LT_FLAGS
 	and LT_UP
 	jp z,.done
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	sub 3
-	ld (MARK_ROW),a
+	ld (ix+MARK_ROW),a
 	ld a,(LINLEN)
 	ld e,a
 .mk_ok:
@@ -560,7 +580,7 @@ PRINTHOOK:
 	; เอง: "ไม้หันอากาศ ไม้เอกต้องผสมกัน แล้ววาดแทนไม้หันอากาศเดิม ที่ N-1" (ไม่ใช่ซ้อนแถว-2 แยก
 	; ต่างหากแบบที่เข้าใจผิดไว้รอบแรก) -- ยืนยันตรงกับ disassembly ของ original ROM เป๊ะด้วย (ดู
 	; printon_algorithm_report.md 1.5/2.1) และ pixel-match ตรงกับฟอนต์บิตแมปจริง (thaifont.asm)
-	ld a,(MARK_ROW)
+	ld a,(ix+MARK_ROW)
 	dec a                         ; A = แถว 1-based ที่จะตรวจ (แถวเหนือ PRINT_ROW หนึ่งชั้น)
 	jp m,.place_row_minus1        ; PRINT_ROW=0 ผิดปกติ (กันเหนียว) -- ถือว่าไม่มีสระ
 	; *** บั๊กที่เจอตอนตรวจทาน (ยังไม่เคยเจอจริงเพราะรอบแรกไม่เคยใช้ C หลังจุดนี้): NAMETAB_ADDR
@@ -589,25 +609,25 @@ PRINTHOOK:
 	call COMBINE_LOOKUP           ; entry A=สระบน,C=วรรณยุกต์(ยังอยู่ตั้งแต่ต้นฟังก์ชัน) -> A=โค้ดผสม
 	                               ; ทำลาย B/C/HL (ไม่แตะ D/E -- D คือที่ที่เราสำรองสระบนไว้พอดี)
 	jp nc,.place_row_minus1       ; 9.19: ไม่มี glyph ผสมของคู่นี้ในฟอนต์ -- วางทับแถว-1 เฉย ๆ
-	ld (PRINT_COMBINE_CODE),a
-	ld a,(MARK_ROW)
+	ld (ix+PRINT_COMBINE_CODE),a
+	ld a,(ix+MARK_ROW)
 	dec a
-	ld (PRINT_COMBINE_ROW),a
+	ld (ix+PRINT_COMBINE_ROW),a
 	ld a,e
-	ld (PRINT_COMBINE_COL),a
+	ld (ix+PRINT_COMBINE_COL),a
 	ld a,TRUE
-	ld (PRINT_COMBINE_PENDING),a
+	ld (ix+PRINT_COMBINE_PENDING),a
 	; --- บันทึกไว้เผื่อผู้ใช้กด Backspace ทันทีถัดจากนี้ -- ต้อง undo กลับเป็นสระบนเปล่า ๆ
 	; (ดู PRINT_LAST_MARK_* ใน equates.asm และขั้น 1.7 ด้านบน) ---
 	ld a,d                        ; A = สระบนเดิม (จาก D ที่สำรองไว้ -- ไม่ใช่ B ที่ถูกทับไปแล้ว)
-	ld (PRINT_LAST_MARK_VOWEL),a
-	ld a,(MARK_ROW)
+	ld (ix+PRINT_LAST_MARK_VOWEL),a
+	ld a,(ix+MARK_ROW)
 	dec a
-	ld (PRINT_LAST_MARK_ROW),a
+	ld (ix+PRINT_LAST_MARK_ROW),a
 	ld a,e
-	ld (PRINT_LAST_MARK_COL),a
+	ld (ix+PRINT_LAST_MARK_COL),a
 	ld a,TRUE
-	ld (PRINT_LAST_MARK_VALID),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
 	jp .place_row_minus1          ; ตกลงไปวาดที่แถว-1 ตามปกติ (BIOS จะวาดวรรณยุกต์ตัวเปล่าทับ
 	                               ; ตำแหน่งนี้ไปก่อน -- ผิดชั่วคราว 1 จังหวะ แล้วค่อยแก้เป็น glyph
 	                               ; ผสมตอนเรียก PRINTHOOK ครั้งถัดไปตามที่เตรียมไว้ข้างบน)
@@ -617,7 +637,7 @@ PRINTHOOK:
 	; อยู่คนละตำแหน่ง -- เหนือพยัญชนะ ไม่เกี่ยวกับสระล่าง) ผู้ใช้ยืนยันเอง: "◌ุ กับ ◌ู วาดที่ N+1"
 	call GET_BOTTOM
 	ld b,a
-	ld a,(MARK_ROW)
+	ld a,(ix+MARK_ROW)
 	cp b                          ; 9.20: แถว+1 ต้องไม่เลยแถวล่างสุดที่ใช้ได้ (ไม่ทับแถว function key)
 	jp nc,.done
 	inc a
@@ -628,13 +648,13 @@ PRINTHOOK:
 	ld a,e
 	ld (CSRX),a
 	ld a,TRUE
-	ld (PRINT_REDIRECT),a
+	ld (ix+PRINT_REDIRECT),a
 	jp .done
 
 .place_row_minus1:
 	; class=1 (สระบนเดี่ยว ๆ) หรือ class=2 ที่ไม่มีสระบนให้ผสม (รวมถึงกรณีผสมแล้วที่ jr มาจากบนด้วย
 	; -- ตำแหน่งวาดเหมือนกันทุกกรณี คือแถว-1 คอลัมน์เดิมของพยัญชนะ)
-	ld a,(MARK_ROW)
+	ld a,(ix+MARK_ROW)
 	dec a
 	jp m,.done                   ; แถวติดลบ (บนสุดจอพอดี) -- กันเหนียว ไม่ซ้อน
 	jp z,.done                   ; แถว=0 ก็ผิดปกติเช่นกัน (CSRY เป็น 1-based)
@@ -645,7 +665,7 @@ PRINTHOOK:
 	ld a,e
 	ld (CSRX),a
 	ld a,TRUE
-	ld (PRINT_REDIRECT),a
+	ld (ix+PRINT_REDIRECT),a
 	jp .done
 
 ; --- 9.20: BS ของตัวแก้ไขบรรทัดขณะ PRINTON ---
@@ -653,16 +673,16 @@ PRINTHOOK:
 ;  ไม่งั้น -> ลบทั้งช่อง (ตัวแถวกลาง + สระบน/วรรณยุกต์ + สระล่าง ของคอลัมน์นั้น) เลื่อนทั้ง 3 แถวไปทางซ้าย
 ;  แล้วถอย cursor 1 ช่อง -- ข้อมูลที่เก็บจึงหายไปด้วย เพราะ INLIN_REBUILD อ่านจากจอตอนกด Enter
 .thai_bs:
-	ld a,(PRINT_LAST_MARK_VALID)
+	ld a,(ix+PRINT_LAST_MARK_VALID)
 	or a
 	jr z,.tbs_col
 	xor a
-	ld (PRINT_LAST_MARK_VALID),a
-	ld a,(PRINT_LAST_MARK_COL)
+	ld (ix+PRINT_LAST_MARK_VALID),a
+	ld a,(ix+PRINT_LAST_MARK_COL)
 	ld e,a
-	ld a,(PRINT_LAST_MARK_ROW)
+	ld a,(ix+PRINT_LAST_MARK_ROW)
 	call NAMETAB_ADDR
-	ld a,(PRINT_LAST_MARK_VOWEL)
+	ld a,(ix+PRINT_LAST_MARK_VOWEL)
 	call WRTVRM
 	jp .done
 .tbs_col:
@@ -670,7 +690,7 @@ PRINTHOOK:
 	dec a
 	jr z,.tbs_wrap
 	ld e,a
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call DELCOL
 	ld a,(CSRX)
 	dec a
@@ -678,27 +698,27 @@ PRINTHOOK:
 	jp .done
 .tbs_wrap:
 	; 9.25: ต้นแถวต่อ -> ลบตัวคอลัมน์สุดท้ายของแถวข้อความก่อนหน้า แล้วย้าย cursor ไปที่นั่น
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call LT_FLAGS
 	and LT_UP
 	jp z,.done
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	sub 3
-	ld (PRINT_ROW),a
+	ld (ix+PRINT_ROW),a
 	ld (CSRY),a
 	ld a,(LINLEN)
 	ld (CSRX),a
 	ld e,a
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call DELCOL
 	jp .done
 ; --- 9.20: DEL = ลบทั้งช่องที่ cursor (cursor ไม่ขยับ) ---
 .thai_del:
 	xor a
-	ld (PRINT_LAST_MARK_VALID),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
 	ld a,(CSRX)
 	ld e,a
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call DELCOL
 
 .done:
@@ -922,8 +942,8 @@ NAMETAB_ADDR:
 ; entry: CSRY = แถวของบรรทัดที่ BIOS เพิ่งอ่าน -- ทำลายทุก register (PRINTHOOK pop คืนเองที่ .done)
 INLIN_REBUILD:
 	ld a,(CSRY)
-	ld (RB_ROW),a
-	ld (RB_M),a
+	ld (ix+RB_ROW),a
+	ld (ix+RB_M),a
 	cp 2
 	jr c,.rb_single               ; แถว 1 ไม่มีแถวก่อนหน้า
 	ld e,a
@@ -935,7 +955,7 @@ INLIN_REBUILD:
 	ret z                         ; แถว R-1 ต่อเนื่องมาแถว R แบบ BIOS (ไม่ใช่ของเรา) -> ไม่ยุ่ง
 .rb_up:
 	; 9.25: ย้อนขึ้นไปหาแถวแรกของบรรทัดที่ต่อแถวแบบ 3 ชั้น (marker LT_DOWN ที่แถว-3)
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp 4
 	jr c,.rb_single
 	sub 3
@@ -944,27 +964,27 @@ INLIN_REBUILD:
 	and LT_DOWN
 	jr z,.rb_single
 	ld a,c
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	jr .rb_up
 .rb_single:
 	ld hl,(FSTPOS)                ; L = แถว, H = คอลัมน์ที่เริ่มรับ
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp l
 	ld a,1
 	jr nz,.rb_setcol
 	ld a,h
 .rb_setcol:
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 	ld de,BUF
 .rb_col:
 	ld a,(LINLEN)
 	ld b,a
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	dec a
 	cp b
 	jr nc,.rb_end                 ; คอลัมน์ > LINLEN -> จบ
 	; --- ตัวแถวกลาง ---
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	call RB_READ
 	or a
 	jr z,.rb_lower                ; ช่องว่างจริง (0) -- BIOS ข้าม
@@ -981,7 +1001,7 @@ INLIN_REBUILD:
 	; --- สระล่างจากแถว+1 ---
 	ld a,(CRTCNT)
 	ld b,a
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp b
 	jr nc,.rb_upper               ; แถวล่างสุดของจอ ไม่มีแถว+1
 	inc a
@@ -993,7 +1013,7 @@ INLIN_REBUILD:
 	call z,RB_EMIT
 .rb_upper:
 	; --- สระบน/วรรณยุกต์จากแถว-1 ---
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp 2
 	jr c,.rb_next
 	dec a
@@ -1015,14 +1035,13 @@ INLIN_REBUILD:
 	ld a,c
 	call RB_EMIT
 .rb_next:
-	ld hl,RB_COL
-	inc (hl)
+	inc (ix+RB_COL)
 	jp .rb_col
 .rb_end:
 	; --- 9.25: แถวนี้ต่อไปที่แถว+3 หรือไม่ (แถวที่กด Enter: BIOS เขียน LINTTB ทับไปแล้ว ดูจากแถว+3 แทน) ---
-	ld a,(RB_M)
+	ld a,(ix+RB_M)
 	ld b,a
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp b
 	jr nz,.rb_own
 	add a,3
@@ -1034,11 +1053,11 @@ INLIN_REBUILD:
 	and LT_DOWN
 .rb_contq:
 	jr z,.rb_trim
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	add a,3
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,1
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 	jp .rb_col
 	; --- ตัดช่องว่างท้ายบรรทัด (ไม่ถอยเลยต้น BUF) แล้วปิดด้วย 0 ---
 .rb_trim:
@@ -1058,7 +1077,7 @@ INLIN_REBUILD:
 	xor a
 	ld (de),a
 	; --- 9.25: ใส่ marker ของแถวที่กด Enter คืน (BIOS $0C29 เขียน $AF ทับ) และให้ LF ไปต่อใต้แถวสุดท้าย ---
-	ld a,(RB_M)
+	ld a,(ix+RB_M)
 	ld b,0
 	cp 4
 	jr c,.rb_m_down
@@ -1068,9 +1087,9 @@ INLIN_REBUILD:
 	jr z,.rb_m_down
 	ld b,LT_UP
 .rb_m_down:
-	ld a,(RB_M)
+	ld a,(ix+RB_M)
 	ld c,a
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	cp c
 	jr z,.rb_m_set
 	ld a,b
@@ -1079,7 +1098,7 @@ INLIN_REBUILD:
 .rb_m_set:
 	ld a,c
 	call LT_SET
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	ld (CSRY),a
 	ret
 
@@ -1088,7 +1107,7 @@ RB_READ:
 	push bc
 	push de
 	ld b,a
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	ld e,a
 	ld a,b
 	call NAMETAB_ADDR
@@ -1135,25 +1154,25 @@ GET_BOTTOM:
 ; entry: A = แถวที่จะวาด, E = คอลัมน์ -- คงทุก register (ถ้าเพิ่งผสม glyph ไว้แล้ว = TRUE ไม่ทับ)
 NOTE_LAST_MARK:
 	push af
-	ld a,(PRINT_LAST_MARK_VALID)
+	ld a,(ix+PRINT_LAST_MARK_VALID)
 	or a
 	jr nz,.nl_keep
 	pop af
 	push af
-	ld (PRINT_LAST_MARK_ROW),a
+	ld (ix+PRINT_LAST_MARK_ROW),a
 	push bc
 	push de
 	push hl
 	call NAMETAB_ADDR
 	call RDVRM
-	ld (PRINT_LAST_MARK_VOWEL),a
+	ld (ix+PRINT_LAST_MARK_VOWEL),a
 	pop hl
 	pop de
 	pop bc
 	ld a,e
-	ld (PRINT_LAST_MARK_COL),a
+	ld (ix+PRINT_LAST_MARK_COL),a
 	ld a,1
-	ld (PRINT_LAST_MARK_VALID),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
 .nl_keep:
 	pop af
 	ret
@@ -1163,15 +1182,15 @@ NOTE_LAST_MARK:
 DELCOL:
 	; 9.25: entry A = แถว, E = คอลัมน์ -- ลบช่องนั้นทั้ง 3 ชั้นแล้วเลื่อนซ้าย ถ้าแถวต่อไปที่แถว+3 ดึงช่องแรก
 	; ของแถวถัดไป (3 ชั้น) มาเติมคอลัมน์สุดท้าย แล้วทำต่อที่แถวถัดไปจนสุดบรรทัด -- ทำลายทุก register
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 .dl_loop:
 	ld a,(LINLEN)
 	cp e
 	ret c
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	ld d,0
 	call SHIFTROW_L
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	cp 2
 	jr c,.dl_low
 	dec a
@@ -1180,22 +1199,22 @@ DELCOL:
 .dl_low:
 	call GET_BOTTOM
 	ld b,a
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	cp b
 	jr nc,.dl_next
 	inc a
 	ld d,3
 	call SHIFTROW_L
 .dl_next:
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	call LT_FLAGS
 	and LT_DOWN
 	ret z
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	call PULL3                    ; (แถว+3, คอลัมน์ 1) -> (แถว, LINLEN) ทั้ง 3 ชั้น
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	add a,3
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 	ld e,1
 	jr .dl_loop
 
@@ -1212,14 +1231,14 @@ PULL3:
 	add a,3
 	ld b,a                        ; B = แถวต้นทาง
 	ld a,1
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 	ld a,b
 	call RB_READ
 	ld d,a
 	ld a,c
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,(LINLEN)
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 	ld a,d
 	call RB_WRITE
 .p3_skip:
@@ -1244,7 +1263,7 @@ INS_FIX:
 	push de
 	push hl
 	ld b,a
-	ld a,(INLIN_ACTIVE)
+	ld a,(ix+INLIN_ACTIVE)
 	or a
 	jr z,.if_ret
 	ld a,(ESCCNT)
@@ -1258,10 +1277,10 @@ INS_FIX:
 	cp THAI_DEL_CODE
 	jr z,.if_ret
 	xor a
-	ld (THAI_INS),a
+	ld (ix+THAI_INS),a
 	jr .if_ret
 .if_print:
-	ld a,(THAI_INS)
+	ld a,(ix+THAI_INS)
 	or a
 	jr z,.if_ret
 	ld a,b
@@ -1269,7 +1288,7 @@ INS_FIX:
 	jr nz,.if_ret
 	ld a,(CSRX)
 	ld e,a
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	call INSCOL
 .if_ret:
 	pop hl
@@ -1281,39 +1300,39 @@ INS_FIX:
 ; คอลัมน์สุดท้าย (พร้อมสระบน/ล่างของมัน) ไปต่อที่ต้นแถวต่อ ถ้าแถวสุดท้ายล้นเป็นตัวที่ไม่ใช่ช่องว่าง ต่อแถวใหม่
 ; (LINK_NEXT -- อาจ scroll จอ PRINT_ROW เลื่อนตาม) -- ทำลายทุก register
 INSCOL:
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 	xor a
-	ld (IC_CARRY),a
-	ld (IC_CARRY+1),a
-	ld (IC_CARRY+2),a
+	ld (ix+IC_CARRY),a
+	ld (ix+IC_CARRY+1),a
+	ld (ix+IC_CARRY+2),a
 	ld d,0                        ; D = มีตัวค้างจากแถวก่อนหรือไม่
 .ic_loop:
 	push de
 	; เก็บตัวที่จะล้น (3 ชั้น) ของแถวนี้ไว้ก่อนเลื่อน -- ใช้ stack พักค่าตัวค้างรอบก่อน
-	ld a,(IC_CARRY)
+	ld a,(ix+IC_CARRY)
 	push af
-	ld a,(IC_CARRY+1)
+	ld a,(ix+IC_CARRY+1)
 	push af
-	ld a,(IC_CARRY+2)
+	ld a,(ix+IC_CARRY+2)
 	push af
 	ld a,(LINLEN)
-	ld (RB_COL),a
-	ld a,(DC_ROW)
+	ld (ix+RB_COL),a
+	ld a,(ix+DC_ROW)
 	dec a
 	call nz,RB_READ_OR_SP
-	ld (IC_CARRY),a
-	ld a,(DC_ROW)
+	ld (ix+IC_CARRY),a
+	ld a,(ix+DC_ROW)
 	call RB_READ
-	ld (IC_CARRY+1),a
-	ld a,(DC_ROW)
+	ld (ix+IC_CARRY+1),a
+	ld a,(ix+DC_ROW)
 	inc a
 	call RB_READ_OR_SP
-	ld (IC_CARRY+2),a
+	ld (ix+IC_CARRY+2),a
 	; เลื่อนทั้ง 3 ชั้น
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	ld d,0
 	call SHIFTROW_R
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	cp 2
 	jr c,.ic_low
 	dec a
@@ -1322,7 +1341,7 @@ INSCOL:
 .ic_low:
 	call GET_BOTTOM
 	ld b,a
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	cp b
 	jr nc,.ic_put
 	inc a
@@ -1341,35 +1360,35 @@ INSCOL:
 	call nz,IC_PUT3
 	pop de
 	; แถวนี้ต่อไปแถว+3 หรือไม่
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	call LT_FLAGS
 	and LT_DOWN
 	jr nz,.ic_next
-	ld a,(IC_CARRY+1)
+	ld a,(ix+IC_CARRY+1)
 	cp $21
 	ret c                         ; ล้นเป็นช่องว่าง/0 -- จบ
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	call LINK_NEXT
 	ld b,a
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	sub b
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 	; แถวใหม่ว่างอยู่แล้ว ใส่ตัวค้างที่คอลัมน์ 1 แล้วจบ
 	add a,3
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 	ld e,1
-	ld a,(IC_CARRY)
+	ld a,(ix+IC_CARRY)
 	push af
-	ld a,(IC_CARRY+1)
+	ld a,(ix+IC_CARRY+1)
 	ld b,a
-	ld a,(IC_CARRY+2)
+	ld a,(ix+IC_CARRY+2)
 	ld c,a
 	pop af
 	jp IC_PUT3
 .ic_next:
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	add a,3
-	ld (DC_ROW),a
+	ld (ix+DC_ROW),a
 	ld e,1
 	ld d,1
 	jp .ic_loop
@@ -1381,9 +1400,9 @@ IC_PUT3:
 	push bc
 	push af
 	ld a,e
-	ld (RB_COL),a
-	ld a,(DC_ROW)
-	ld (RB_ROW),a
+	ld (ix+RB_COL),a
+	ld a,(ix+DC_ROW)
+	ld (ix+RB_ROW),a
 	ld a,b
 	call RB_WRITE
 	pop af
@@ -1391,9 +1410,9 @@ IC_PUT3:
 	call CLASSIFY_THAI_MARK
 	or a
 	jr z,.ip_low
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	dec a
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	pop af
 	push af
 	call RB_WRITE
@@ -1406,9 +1425,9 @@ IC_PUT3:
 	call CLASSIFY_THAI_MARK
 	cp 3
 	jr nz,.ip_ret
-	ld a,(DC_ROW)
+	ld a,(ix+DC_ROW)
 	inc a
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,c
 	call RB_WRITE
 .ip_ret:
@@ -1432,17 +1451,17 @@ RB_READ_OR_SP:
 ; หรือไม่ (D=1: สระบน/วรรณยุกต์/glyph ผสม, D=3: สระล่าง) -> carry=1 ถ้าใช่ -- กันไม่ให้ไปเลื่อน
 ; ข้อความของบรรทัดอื่นที่บังเอิญอยู่แถวติดกัน (กรณีไม่ได้เว้น 3 แถว) -- คง DE
 SR_VALID:
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,e
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 .sv_loop:
 	ld a,(LINLEN)
 	ld b,a
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	dec a
 	cp b
 	jr nc,.sv_ok
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	call RB_READ
 	cp $20
 	jr z,.sv_next
@@ -1469,8 +1488,7 @@ SR_VALID:
 	call DECOMBINE
 	ret nc
 .sv_next:
-	ld hl,RB_COL
-	inc (hl)
+	inc (ix+RB_COL)
 	jr .sv_loop
 .sv_ok:
 	scf
@@ -1493,24 +1511,22 @@ SHIFTROW_L:
 	jr nc,.sl_abort
 .sl_go:
 	pop af
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,e
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 .sl_loop:
 	ld a,(LINLEN)
 	ld b,a
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	cp b
 	jr nc,.sl_last
 	inc a
-	ld (RB_COL),a
-	ld a,(RB_ROW)
+	ld (ix+RB_COL),a
+	ld a,(ix+RB_ROW)
 	call RB_READ
-	ld hl,RB_COL
-	dec (hl)
+	dec (ix+RB_COL)
 	call RB_WRITE
-	ld hl,RB_COL
-	inc (hl)
+	inc (ix+RB_COL)
 	jr .sl_loop
 .sl_last:
 	ld a,$20
@@ -1539,23 +1555,21 @@ SHIFTROW_R:
 	jr nc,.sr_abort
 .sr_go:
 	pop af
-	ld (RB_ROW),a
+	ld (ix+RB_ROW),a
 	ld a,(LINLEN)
-	ld (RB_COL),a
+	ld (ix+RB_COL),a
 .sr_loop:
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	cp e
 	jr z,.sr_first
 	jr c,.sr_first
 	dec a
-	ld (RB_COL),a
-	ld a,(RB_ROW)
+	ld (ix+RB_COL),a
+	ld a,(ix+RB_ROW)
 	call RB_READ
-	ld hl,RB_COL
-	inc (hl)
+	inc (ix+RB_COL)
 	call RB_WRITE
-	ld hl,RB_COL
-	dec (hl)
+	dec (ix+RB_COL)
 	jr .sr_loop
 .sr_first:
 	ld a,$20
@@ -1572,9 +1586,9 @@ RB_WRITE:
 	push bc
 	push de
 	push af
-	ld a,(RB_COL)
+	ld a,(ix+RB_COL)
 	ld e,a
-	ld a,(RB_ROW)
+	ld a,(ix+RB_ROW)
 	call NAMETAB_ADDR
 	pop af
 	call WRTVRM
@@ -1583,102 +1597,51 @@ RB_WRITE:
 	ret
 
 ; ==========================================================================
-; ---- 9.21: cursor แยกสถานะไทย/อังกฤษ ----
-; BIOS วาด cursor (MSX1 $09E6 / MSX2,2+ $0A43 -- โค้ดเหมือนกัน) โดย: อ่านตัวอักษรใต้ cursor เก็บที่
-; CURSAV, คัดลอก glyph ของมันมากลับสี (CSTYLE=0: ทั้ง 8 แถว / INS: 3 แถวล่าง) ลงเป็น glyph โค้ด 255
-; แล้วเขียน 255 ลงช่องนั้น -- ตอนลบ ($0A33/$0A90) เขียน CURSAV คืน
-; วิธีทำรูปของเราเอง: ใน H_DSPC (ก่อน BIOS วาด) เตรียม glyph 255 = รูปที่ต้องการแบบ "กลับสีล่วงหน้า"
-; แล้วเขียน 255 ลงช่องแทนตัวจริง -> BIOS อ่านได้ 255 กลับสีมันอีกรอบ = รูปที่ต้องการพอดี
-; ใน H_ERAC ใส่ตัวจริงคืนใน CURSAV ให้ BIOS เขียนคืนถูกตัว (ไม่ต้องพึ่ง internal address ใดเลย)
-;   อังกฤษ: ไม่ยุ่ง (cursor ทึบปกติ / INS = ขีดล่าง ตาม BIOS)
-;   ไทย   : กรอบสี่เหลี่ยมรอบตัวอักษร (ตัวอักษรยังอ่านออก) / INS = แถบตั้งด้านซ้าย
-; กดปุ่มสลับภาษาระหว่างรอคีย์ -> KEYC_HOOK วาด glyph 255 ใหม่ทันที (CUR_REDRAW)
+; ---- 9.26: cursor ภาษาไทย = รูปเดียวกับอังกฤษ (ของ BIOS) แต่กระพริบ ----
+; BIOS วาด cursor (MSX1 $09E6 / MSX2,2+ $0A43) โดยคัดลอก glyph ของตัวใต้ cursor (เก็บไว้ที่ CURSAV) มากลับสี
+; (CSTYLE=0 ทั้งตัว / INS 3 แถวล่าง) ลง glyph 255 แล้วเขียน 255 ลงช่องนั้น -- ระหว่างรอคีย์ (DSPC..ERAC)
+; TIMI_HOOK สลับ glyph 255 ระหว่าง "กลับสี" (ติด) กับ "ตัวปกติ" (ดับ) ทุก BLINK_FRAMES frame เมื่ออยู่ภาษาไทย
+; (ช่วงรอคีย์โค้ดหลักไม่ใช้ VDP ยกเว้นตอน BIOS วาดป้าย function key ใหม่เพราะ SHIFT เปลี่ยน -- ข้ามรอบนั้น)
+; H.TIMI ต้องส่งต่อ hook เดิมเสมอ (disk ROM ใช้นับเวลาดับมอเตอร์) -- ดู TIMI_HOOK
 
 ; DSPC_HOOK -- คงทุก register
-DSPC_HOOK:
-	push hl
-	push de
-	push bc
+DSPC_BODY:
 	push af
-	ld a,(THAI_MODE)
+	ld a,(ix+THAI_MODE)
 	or a
 	jr z,.dp_done
-	ld a,(SCRMOD)
-	cp 2
-	jr nc,.dp_done                ; ไม่ใช่โหมดข้อความ -- BIOS ไม่วาด cursor เอง
-	ld a,(CSRX)
-	ld e,a
-	ld a,(CSRY)
-	call NAMETAB_ADDR
-	push hl
-	call RDVRM
-	ld (CUR_REAL),a
-	ld a,(IN_CHGET)
-	ld (CUR_WAITING),a
+	ld a,(ix+IN_CHGET)
+	ld (ix+CUR_WAITING),a
 	xor a
-	ld (IN_CHGET),a
-	ld a,(INPUT_MODE)
-	or a
-	jr z,.dp_pop                  ; สถานะอังกฤษ -- ให้ BIOS วาดแบบปกติ
-	ld a,3                        ; รูปไทย + กลับสีล่วงหน้าให้ BIOS
-	call CUR_BUILD
-	pop hl
-	ld a,$FF
-	call WRTVRM
-	ld a,TRUE
-	ld (CUR_ACTIVE),a
-	jr .dp_done
-.dp_pop:
-	pop hl
+	ld (ix+IN_CHGET),a
+	ld (ix+BLINK_CNT),a
+	ld (ix+BLINK_OFF),a
 .dp_done:
 	pop af
-	pop bc
-	pop de
-	pop hl
 	ret
 
 ; ERAC_HOOK -- คงทุก register
-ERAC_HOOK:
+ERAC_BODY:
 	push af
 	xor a
-	ld (CUR_WAITING),a
-	ld a,(CUR_ACTIVE)
-	or a
-	jr z,.er_done
-	xor a
-	ld (CUR_ACTIVE),a
-	ld a,(CUR_REAL)
-	ld (CURSAV),a
-.er_done:
+	ld (ix+CUR_WAITING),a
+	ld (ix+BLINK_OFF),a
 	pop af
 	ret
 
-; CUR_REDRAW -- เรียกจาก KEYC_HOOK (ใน interrupt) หลังสลับภาษา: ถ้า cursor รอคีย์แสดงอยู่ วาด glyph
-; 255 ใหม่ตามสถานะปัจจุบัน -- ช่วงนี้โค้ดหลักวนรอคีย์อยู่ ไม่ได้ใช้ VDP ยกเว้นตอน BIOS วาดป้าย function
-; key ใหม่เพราะ SHIFT เปลี่ยน ($0D6A) จึงข้ามถ้ามีงานนั้นค้างอยู่ -- คงทุก register
+; CUR_REDRAW -- เรียกจาก KEYC_HOOK (ใน interrupt) หลังสลับภาษา: ให้ cursor "ติด" ทันทีแล้วเริ่มนับใหม่
+; (สลับเป็นอังกฤษตอนกำลังดับ -> กลับมาติดค้าง) -- คงทุก register
 CUR_REDRAW:
 	push hl
 	push de
 	push bc
 	push af
-	ld a,(CUR_WAITING)
-	or a
-	jr z,.cr_done
-	ld a,(CNSDFG)
-	or a
-	jr z,.cr_go
-	ld a,(FNKSWI)
-	ld hl,SHIFT_STATE
-	xor (hl)
-	and 1
-	jr nz,.cr_done
-.cr_go:
-	ld a,(INPUT_MODE)
-	or a
-	ld a,1                        ; ไทย: รูปไทยตรง ๆ
-	jr nz,.cr_build
-	ld a,2                        ; อังกฤษ: รูปมาตรฐานของ BIOS (กลับสีตาม CSTYLE)
-.cr_build:
+	call CUR_SAFE
+	jr nc,.cr_done
+	xor a
+	ld (ix+BLINK_CNT),a
+	ld (ix+BLINK_OFF),a
+	ld a,2
 	call CUR_BUILD
 .cr_done:
 	pop af
@@ -1687,9 +1650,75 @@ CUR_REDRAW:
 	pop hl
 	ret
 
-; CUR_BUILD: สร้าง glyph 255 จาก glyph ของ CUR_REAL
-; entry A: bit0 = ใส่รูปไทย (กรอบ / INS: แถบซ้าย), bit1 = กลับสีแบบ BIOS (ทั้งหมด หรือ 3 แถวล่างถ้า
-; CSTYLE!=0) -- ทำลายทุก register ใช้ stack 8 ไบต์เป็น buffer (ไม่ใช้ LINWRK ของ BIOS)
+; CUR_SAFE: carry=1 ถ้า cursor รอคีย์แสดงอยู่ (โหมดข้อความ) และ BIOS ไม่มีงานวาดป้าย function key ค้าง
+CUR_SAFE:
+	ld a,(ix+CUR_WAITING)
+	or a
+	ret z
+	ld a,(SCRMOD)
+	cp 2
+	ret nc                        ; SCREEN 2+ -> nc
+	ld a,(CNSDFG)
+	or a
+	scf
+	ret z
+	ld a,(FNKSWI)
+	ld hl,SHIFT_STATE
+	xor (hl)
+	and 1
+	scf
+	ret z
+	or a
+	ret
+
+; TIMI_HOOK -- ทุก VDP interrupt: กระพริบ cursor ภาษาไทย แล้วส่งต่อไป hook เดิม (PREV_TIMI) โดยคืนทุก
+; register ตามเดิม (A = VDP status ที่ hook ตัวอื่นอาจใช้)
+TIMI_BODY:
+	push hl
+	push de
+	push bc
+	push af
+	call CUR_SAFE
+	jr nc,.ti_chain
+	ld a,(ix+THAI_MODE)
+	or a
+	jr z,.ti_chain
+	ld a,(ix+INPUT_MODE)
+	or a
+	jr z,.ti_eng
+	ld a,(ix+BLINK_CNT)
+	inc a
+	ld (ix+BLINK_CNT),a
+	cp BLINK_FRAMES
+	jr c,.ti_chain
+	xor a
+	ld (ix+BLINK_CNT),a
+	ld a,(ix+BLINK_OFF)
+	xor 1
+	ld (ix+BLINK_OFF),a
+	ld a,2                        ; ติด = กลับสีแบบ BIOS
+	jr z,.ti_draw
+	xor a                         ; ดับ = ตัวปกติ
+.ti_draw:
+	call CUR_BUILD
+	jr .ti_chain
+.ti_eng:
+	ld a,(ix+BLINK_OFF)              ; อังกฤษแต่ค้างอยู่ช่วงดับ -> ให้ติด
+	or a
+	jr z,.ti_chain
+	xor a
+	ld (ix+BLINK_OFF),a
+	ld a,2
+	call CUR_BUILD
+.ti_chain:
+	pop af
+	pop bc
+	pop de
+	pop hl
+	ret                           ; 9.27: wrapper TIMI_HOOK (workram.asm) ส่งต่อ hook เดิม
+
+; CUR_BUILD: เขียน glyph 255 จาก glyph ของตัวใต้ cursor (CURSAV) -- A bit1 = กลับสีแบบ BIOS (ทั้งตัว หรือ
+; 3 แถวล่างถ้า CSTYLE!=0) / 0 = ตัวปกติ -- ทำลายทุก register ใช้ stack 8 ไบต์เป็น buffer
 CUR_BUILD:
 	ld c,a
 	ld hl,-8
@@ -1698,7 +1727,7 @@ CUR_BUILD:
 	ex de,hl                      ; DE = buffer
 	push de
 	push bc
-	ld a,(CUR_REAL)
+	ld a,(CURSAV)
 	ld l,a
 	ld h,0
 	add hl,hl
@@ -1714,35 +1743,6 @@ CUR_BUILD:
 	ld b,0                        ; B = แถว 0..7
 .cb_row:
 	ld a,(hl)
-	bit 0,c
-	jr z,.cb_inv
-	ld d,a
-	ld a,(CSTYLE)
-	or a
-	jr nz,.cb_bar
-	ld a,b
-	or a
-	jr z,.cb_edge
-	cp 7
-	jr z,.cb_edge
-	ld a,(SCRMOD)                 ; ขอบซ้าย+ขวา: SCREEN 0 กว้าง 6 จุด (bit7..2), SCREEN 1 8 จุด
-	or a
-	ld a,$84
-	jr z,.cb_x
-	ld a,$81
-	jr .cb_x
-.cb_edge:
-	ld a,(SCRMOD)                 ; ขอบบน/ล่าง: เต็มความกว้างที่มองเห็น
-	or a
-	ld a,$FC
-	jr z,.cb_x
-	ld a,$FF
-	jr .cb_x
-.cb_bar:
-	ld a,$C0                      ; INS ไทย: แถบตั้งด้านซ้าย 2 จุด
-.cb_x:
-	xor d
-.cb_inv:
 	bit 1,c
 	jr z,.cb_store
 	ld d,a
@@ -1782,7 +1782,7 @@ CUR_BUILD:
 ; SCREEN 0:WIDTH 80 บน MSX2) -- เช็ค 2 ไบต์ของ glyph ก ($A1) ใน pattern table ปัจจุบัน ถ้าไม่ใช่ของเรา
 ; โหลดฟอนต์ไทยใหม่ทั้งชุด -- เฉพาะโหมดข้อความ (SCREEN 0/1) และตอน THAION -- ทำลาย AF/BC/DE/HL
 FONT_CHECK:
-	ld a,(THAI_MODE)
+	ld a,(ix+THAI_MODE)
 	or a
 	ret z
 	ld a,(SCRMOD)
@@ -1862,11 +1862,11 @@ LT_SET:
 .ls_plain:
 	ld a,$AF
 .ls_put:
-	ld (LT_TMP),a                 ; (LT_ADDR ทับ DE -- พักค่าไว้ใน RAM)
+	ld (ix+LT_TMP),a                 ; (LT_ADDR ทับ DE -- พักค่าไว้ใน RAM)
 	pop af
 	push af
 	call LT_ADDR
-	ld a,(LT_TMP)
+	ld a,(ix+LT_TMP)
 	ld (hl),a
 	pop af
 	pop hl
@@ -1892,22 +1892,22 @@ LINK_NEXT:
 	call GET_BOTTOM
 	ld (CSRY),a
 	ld a,TRUE
-	ld (PRINT_IN_LF),a
+	ld (ix+PRINT_IN_LF),a
 .ln_scroll:
 	push bc
 	ld a,10
-	call CHPUT
+	call CHPUT_IX
 	pop bc
 	djnz .ln_scroll
 	xor a
-	ld (PRINT_IN_LF),a
+	ld (ix+PRINT_IN_LF),a
 	pop af                        ; CSRY เดิม
 	pop bc                        ; B = จำนวนที่ scroll, C = r เดิม
 	sub b
 	ld (CSRY),a
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	sub b
-	ld (PRINT_ROW),a
+	ld (ix+PRINT_ROW),a
 	ld a,c
 	sub b
 	ld c,a
@@ -1946,11 +1946,11 @@ LT_SET_PLAIN:
 ; WRAP_FIX: หลัง BIOS ตัดบรรทัดไปแถว+1 (WRAP_PENDING, cursor อยู่คอลัมน์ 1, LINTTB[แถวก่อน]=0) ย้ายไปแถว+3
 ; ทำลายทุก register
 WRAP_FIX:
-	ld a,(WRAP_PENDING)
+	ld a,(ix+WRAP_PENDING)
 	or a
 	ret z
 	xor a
-	ld (WRAP_PENDING),a
+	ld (ix+WRAP_PENDING),a
 	ld a,(CSRX)
 	cp 1
 	ret nz
@@ -2009,16 +2009,16 @@ GHOST_CHECK:
 	push de
 	push hl
 	ld b,a                        ; B = แถว
-	ld a,(PRINT_COMBINE_PENDING)
+	ld a,(ix+PRINT_COMBINE_PENDING)
 	or a
 	jr z,.gc_single
 	xor a
-	ld (PRINT_COMBINE_PENDING),a
-	ld a,(PRINT_COMBINE_ROW)
+	ld (ix+PRINT_COMBINE_PENDING),a
+	ld a,(ix+PRINT_COMBINE_ROW)
 	ld b,a
-	ld a,(PRINT_COMBINE_COL)
+	ld a,(ix+PRINT_COMBINE_COL)
 	ld e,a
-	ld a,(PRINT_COMBINE_CODE)
+	ld a,(ix+PRINT_COMBINE_CODE)
 	ld c,a
 .gc_single:
 	push bc
@@ -2029,16 +2029,16 @@ GHOST_CHECK:
 	call WRTVRM
 	; ตัวหลอก: จำช่องที่ cursor จริง
 	ld a,(CSRY)
-	ld (GHOST_ROW),a
+	ld (ix+GHOST_ROW),a
 	ld a,(CSRX)
-	ld (GHOST_COL),a
+	ld (ix+GHOST_COL),a
 	ld e,a
-	ld a,(GHOST_ROW)
+	ld a,(ix+GHOST_ROW)
 	call NAMETAB_ADDR
 	call RDVRM
-	ld (GHOST_CHAR),a
+	ld (ix+GHOST_CHAR),a
 	ld a,TRUE
-	ld (GHOST_PENDING),a
+	ld (ix+GHOST_PENDING),a
 	pop hl
 	pop de
 	pop bc
@@ -2049,29 +2049,29 @@ GHOST_CHECK:
 ; PRINT_RESYNC: เรียกตอนต้น PRINTHOOK และ CHGE_HOOK -- คืน CSRY จริงหลังยักย้าย, เขียนคืนตัวหลอก,
 ; ย้ายการตัดบรรทัดของ BIOS ไปแถว+3, รีเฟรช PRINT_ROW, แก้ glyph ผสมที่ค้าง -- ทำลายทุก register
 PRINT_RESYNC:
-	ld a,(PRINT_REDIRECT)
+	ld a,(ix+PRINT_REDIRECT)
 	or a
 	jr z,.rs_ghost
-	ld a,(PRINT_ROW)
+	ld a,(ix+PRINT_ROW)
 	ld (CSRY),a
 	xor a
-	ld (PRINT_REDIRECT),a
+	ld (ix+PRINT_REDIRECT),a
 .rs_ghost:
-	ld a,(GHOST_PENDING)
+	ld a,(ix+GHOST_PENDING)
 	or a
 	jr z,.rs_wrap
 	xor a
-	ld (GHOST_PENDING),a
-	ld a,(GHOST_COL)
+	ld (ix+GHOST_PENDING),a
+	ld a,(ix+GHOST_COL)
 	ld e,a
 	ld (CSRX),a
-	ld a,(GHOST_ROW)
+	ld a,(ix+GHOST_ROW)
 	ld (CSRY),a
 	call NAMETAB_ADDR
-	ld a,(GHOST_CHAR)
+	ld a,(ix+GHOST_CHAR)
 	call WRTVRM
 .rs_wrap:
 	call WRAP_FIX
 	ld a,(CSRY)
-	ld (PRINT_ROW),a
+	ld (ix+PRINT_ROW),a
 	jp COMBINE_FIX

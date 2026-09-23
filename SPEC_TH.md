@@ -1341,6 +1341,51 @@ BIOS ตัดบรรทัดที่เกินความกว้าง
   PRINT จากโปรแกรมที่ยาวเกินแถววนซ้ำจนจอ scroll -- เทสเดิมทั้งหมดผ่าน (t_edit ปรับให้กดขึ้นทีละ 3 แถว)
 - RAM ใหม่ $FD48-$FD54 (SLTWRK ต่อจากเดิม)
 
+### 9.26 cursor ภาษาไทย = รูปเดียวกับอังกฤษ แต่กระพริบ (แทนกรอบสี่เหลี่ยมของ 9.21)
+
+- รูป cursor ทั้งสองภาษาเป็นของ BIOS (ทึบ / INS ขีดล่าง) -- ภาษาไทยต่างแค่กระพริบ
+- H.DSPC/H.ERAC ใช้แค่จำว่า "cursor รอคีย์แสดงอยู่" (CUR_WAITING) ไม่แทนตัวใต้ cursor อีกแล้ว
+- hook ใหม่ **H.TIMI ($FD9F)**: ทุก BLINK_FRAMES (20) frame ถ้าเป็นภาษาไทยและ cursor รอคีย์แสดงอยู่ (SCREEN 0/1,
+  ไม่มีงานวาดป้าย function key ค้าง) สลับ glyph 255 ระหว่าง "กลับสีแบบ BIOS" (ติด) กับ "glyph ปกติของตัวใต้
+  cursor จาก CURSAV" (ดับ) -- ส่งต่อ hook เดิมเสมอ (disk ROM ใช้ H.TIMI) โดยคืนทุก register รวม A (VDP status)
+- สลับเป็นอังกฤษตอนกำลังดับ -> วาดติดคืนทันที (CUR_REDRAW ตอนกดปุ่มสลับ และ TIMI_HOOK เช็คซ้ำ)
+- บั๊กที่เจอระหว่างทำ: CUR_SAFE เช็ค SCREEN ด้วย `cp 2 / ccf / ret nc` กลับด้าน -> ไม่กระพริบเลย แก้เป็น `cp 2 / ret nc`
+- ยืนยัน (`tests_919/t_blink.tcl`): อังกฤษ glyph 255 = FF.. คงที่, ไทยสลับ 00../FF.. เป็นจังหวะ, สลับกลับอังกฤษ
+  ติดค้าง, THAIOFF คืน H.TIMI เป็น C9 ครบ 5 ไบต์ -- MSX1, MSX1 expanded, MSX2, MSX2+
+- `tests_919/t_cursor.tcl` (เขียนใหม่): เก็บ glyph 255 หลายครั้งต่อสถานะ -- อังกฤษเห็นค่าเดียว, ไทยเห็น 2 ค่า
+  (กลับสี/ปกติ) ทั้งบนช่องว่าง บนตัว b และโหมด INS (กลับสีเฉพาะแถว 5-7)
+
+### 9.27 ย้าย RAM ของ ROM ออกจาก SLTWRK ไปบล็อกที่จองผ่าน HIMEM
+
+เดิมตัวแปรทั้งหมดอยู่ $FD09-$FD5B = SLTWRK ของ **slot อื่น** (0-x ถึง 2-x) ถ้าเครื่องจริงมี ROM ที่ใช้ช่องนั้น
+(เช่น disk interface) จะชนกัน -- เปลี่ยนเป็นวิธีมาตรฐานของ cartridge (`src/workram.asm`):
+- INIT (WORK_ALLOC): ถ้าช่อง SLTWRK ของ slot เราเอง (page 1: SLTWRK + primary*32 + secondary*8 + 2) ยังเป็น 0
+  ลด HIMEM ($FC4A) ลง WORK_SIZE (83) ไบต์ ล้างเป็น 0 แล้วเก็บ address ไว้ในช่องนั้น (INIT ถูกเรียกซ้ำได้ -> จองครั้งเดียว)
+- ทุกจุดเข้า (INIT, STATEMENT, BOOT_HOOK, และ hook ทุกตัว: KEYC/CHPU/CHGE/PINL/INLI/DSPC/ERAC/TIMI) เป็น
+  wrapper: `push ix / call GET_IX / call ..._BODY / pop ix` -- ตัวแปรทุกตัวเป็น offset อ้างแบบ `(ix+ชื่อ)`
+- address จริงของ backup hook (PREV_*) คำนวณด้วย IX_HL/IX_DE; TIMI_HOOK ส่งต่อ hook เดิมด้วยการวาง address
+  ปลายทาง (บล็อก+PREV_TIMI) บน stack แล้ว RET (ทุก register รวม IX ของผู้ถูกขัดจังหวะคืนครบ)
+- ลบ dead code KEYC_TRAMPOLINE เดิมทิ้ง; ตอนนี้ ROM ไม่เขียน RAM นอก hook มาตรฐาน/ตัวแปรระบบที่ documented
+  กับบล็อกของตัวเองเลย
+- **FIX_FILES** (ต่อท้าย WORK_ALLOC): BASIC จัด file buffer (FILTAB/FCB) ใต้ HIMEM ไว้แล้ว *ก่อน* เรียก INIT ของ
+  cartridge ($7CCC -> scan slot $7D14, ไม่คำนวณใหม่หลัง scan -- ตรวจจาก disassembly MSX1 และ routine เดียวกันที่
+  $7E6B บน MSX2/2+) ถ้าแค่ลด HIMEM บล็อกจะทับ buffer ของไฟล์ #1 (F32D-F37F = 83 ไบต์ท้าย FCB#1) ->
+  OPEN ... AS #1 เขียนทับ PREV_TIMI แล้วค้าง -- จึงคำนวณ FILTAB/MEMSIZ/STKTOP/ตาราง FCB/NULBUF ใหม่ตามสูตรเดียวกับ
+  MAXFILES= จากตัวแปรระบบที่ documented (ไม่เรียก routine ภายในของ BASIC) -- SP ไม่ต้องย้ายเพราะ BASIC ตั้ง stack
+  ใหม่จาก STKTOP หลัง scan เอง; ยืนยันว่าค่าที่ได้ตรงกับที่ BASIC คำนวณเองเมื่อสั่ง `MAXFILES=1` ทุกตัว
+- ผลที่เห็น: "Bytes free" ลดลง 83 ไบต์ (28815 -> 28732)
+- ยังไม่ได้ทดสอบกับเครื่องที่มี disk ROM (openMSX ในเครื่องทดสอบไม่มี disk ROM) -- disk ROM ใช้ช่อง SLTWRK ของ slot
+  ตัวเอง จึงไม่ชนกับเราแล้ว และถ้า disk ROM ลด HIMEM ต่อหลังเรา ก็จัด buffer ใหม่จาก HIMEM ปัจจุบันตามปกติ
+- ข้อจำกัด: `CLEAR n,addr` ที่ addr สูงกว่าบล็อก ทำให้ BASIC ใช้พื้นที่ทับได้ (เหมือน cartridge ทั่วไปที่จองผ่าน HIMEM)
+- เทสอ่านตัวแปรผ่าน `wv` (หา slot จาก H.KEYC) หรือ `var` (ช่อง SLTWRK ที่ชี้ HIMEM) ใน tests_919/lib.tcl
+- ยืนยัน: tests_919 ทั้งหมด (t_* 11 ตัว + t_cont2 7 กรณี) บน 4 เครื่อง ผลตรงกับรอบก่อนย้าย RAM ยกเว้นบรรทัด Bytes free
+  และรูป cursor (กระพริบ) -- legacy regression ผ่านทั้งหมด ไม่มี FAIL
+
+### 9.28 ฟอนต์ใหม่จากผู้ใช้
+
+- assets/font_raw.bin แทนด้วยไฟล์ msxfont.bin ของผู้ใช้ (2048 ไบต์ ใช้ 2040 ไบต์แรก = glyph 0-254,
+  glyph 255 เป็นของ cursor BIOS ไม่โหลดทับ) -- ต่างจากเดิมที่ ฺ ($DA) และวรรณยุกต์ $E8-$EC ย้ายไปชิดล่างของช่อง
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)
