@@ -171,6 +171,33 @@ PRINT_LAST_MARK_VALID equ $FD1E ; 1 ไบต์ flag: TRUE = มีการผ
 PRINT_LAST_MARK_ROW   equ $FD1F ; 1 ไบต์: แถว (1-based) ที่จะคืนค่า
 PRINT_LAST_MARK_COL   equ $FD20 ; 1 ไบต์: คอลัมน์ (0-based) ที่จะคืนค่า
 PRINT_LAST_MARK_VOWEL equ $FD21 ; 1 ไบต์: โค้ดสระบนเดิม (ก่อนผสม) ที่จะเขียนทับกลับคืน
+;
+; ---- PRINTON + ตัวแก้ไขบรรทัดของ BASIC (9.19) -- ดู comment เต็มที่หัวข้อ "INLIN_REBUILD" ใน
+; src/printon.asm: ตอนกด Enter BIOS อ่านบรรทัดกลับจาก VRAM "เฉพาะแถวที่ cursor อยู่" สระบน/ล่าง/
+; วรรณยุกต์ที่ PRINTON วาดไว้แถวบน/ล่างจึงหายจากโปรแกรม -- ต้องดักแล้วอ่านแถวบน/ล่างรวมกลับเข้า BUF
+; *** หมายเหตุ RAM: ย่าน $FD09-$FD88 คือ SLTWRK ของ BIOS (2 ไบต์ต่อ slot/page) -- โปรเจกต์นี้ใช้ย่าน
+; นี้มาตั้งแต่ต้น (ทดสอบแล้วว่าไม่มีใครใช้บน config ที่ทดสอบ) ตัวแปรชุดใหม่นี้ต่อท้ายจากเดิม
+; ($FD22-$FD33) ซึ่งครอบคลุม SLTWRK ของ slot 0-3 และ slot 1-0 -- ถ้าเครื่องจริงมี ROM อื่น (เช่น
+; disk interface) ใน slot 1-0 อาจชนได้ ควรย้ายไปจองผ่าน HIMEM ในอนาคตถ้าเจอปัญหา
+PREV_CHGE      equ $FD22  ; 5 ไบต์: สำรอง hook slot เดิมของ H_CHGE ($FD22-$FD26)
+PREV_PINL      equ $FD27  ; 5 ไบต์: สำรอง hook slot เดิมของ H_PINL ($FD27-$FD2B)
+PREV_INLI      equ $FD2C  ; 5 ไบต์: สำรอง hook slot เดิมของ H_INLI ($FD2C-$FD30)
+INLIN_ACTIVE   equ $FD31  ; 1 ไบต์ flag: TRUE = BIOS กำลังรับบรรทัด (PINLIN/INLIN/QINLIN) ขณะ PRINTON
+                          ; เปิด -- LF ตัวถัดไปที่ผ่าน PRINTHOOK คือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดเข้า
+                          ; BUF เสร็จ (ยืนยันจาก disassembly: MSX1/MSX2/MSX2+ ที่ $24B9 เหมือนกันทั้ง 3 รุ่น)
+RB_ROW         equ $FD32  ; 1 ไบต์ scratch ของ INLIN_REBUILD: แถว (1-based) ของบรรทัดที่อ่าน
+RB_COL         equ $FD33  ; 1 ไบต์ scratch ของ INLIN_REBUILD: คอลัมน์ (1-based) ที่กำลังอ่าน
+
+; ---- hook / system variable ที่ใช้เพิ่ม (documented ทั้งหมด -- MSX Technical Handbook) ----
+H_PINL      equ $FDDB   ; hook ต้น PINLIN (บรรทัดคำสั่ง/โปรแกรมใน direct mode)
+H_INLI      equ $FDE5   ; hook ต้น INLIN (LINE INPUT, และ QINLIN/INPUT ก็ไหลเข้ามาที่นี่)
+LINTTB      equ $FBB2   ; 24 ไบต์: 0 = แถวนี้ต่อเนื่องไปแถวถัดไป (บรรทัดตรรกะยาวหลายแถว)
+FSTPOS      equ $FBCA   ; 2 ไบต์: ตำแหน่งเริ่มรับบรรทัดของ INLIN (L=แถว, H=คอลัมน์)
+CRTCNT      equ $F3B1   ; จำนวนแถวของจอ (24)
+BUF         equ $F55E   ; buffer บรรทัดที่ INLIN ส่งให้ BASIC (258 ไบต์) -- INLIN_REBUILD เขียนทับ
+                        ; ตรง ๆ โดยอ่านจาก VRAM ใหม่ทั้งหมด (ไม่อ่านจาก BUF เดิม จึงไม่ต้องมี buffer
+                        ; ชั่วคราว -- ห้ามใช้ KBUF เพราะถ้าเป็น INPUT ใน direct mode คำสั่งที่กำลังรัน
+                        ; อยู่ใน KBUF)
 
 ; ---- keyboard type-ahead queue (documented system variables, ยืนยันจาก disassembly
 ;      ของ routine push คิวคีย์บอร์ดในต้นฉบับที่ 0x4E25-0x4E33 ซึ่งอ้างถึงตำแหน่งเหล่านี้ตรง ๆ

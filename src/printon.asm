@@ -42,17 +42,11 @@
 ;      glyph ผสมสระบน+วรรณยุกต์เหล่านี้เอง) ถ้าลบวรรณยุกต์ที่ผสมไปออกด้วย Backspace ทันที ต้อง
 ;      undo กลับเป็นสระบนเปล่า ๆ ด้วย (ผู้ใช้ยืนยัน) -- ดู PRINT_COMBINE_*/PRINT_LAST_MARK_*
 ;      ใน equates.asm และ COMBINE_LOOKUP/COMBINE_TABLE ด้านล่าง
-;   2. D6,D7 ไม่ใช่สระบนอีก 2 ตัว (ที่เข้าใจผิดไว้รอบแรก) แต่เป็น**สระล่าง** (อุ/อู) ซ้อนแถว **+1**
-;      (ใต้พยัญชนะ) ไม่ใช่แถว-1 -- ไม่มีการผสมกับวรรณยุกต์ใด ๆ (ผู้ใช้ยืนยัน + ฟอนต์บิตแมปจริง
-;      label โค้ดนี้ตรงตัวว่า "ุ"/"ู" พอดี)
-; สรุปตารางที่ implement จริงตอนนี้ (ดูรายละเอียดที่ CLASSIFY_THAI_MARK ด้านล่าง):
-;   - สระบน 3 ตัว (D1,D4,D5) -- ซ้อนแถว-1 เสมอ, ผสมกับวรรณยุกต์ถ้ามีวรรณยุกต์ตามมา
-;   - วรรณยุกต์ 4 รูป (E8,E9,EA,EB) -- ซ้อนแถว-1 เปล่า ๆ ถ้าไม่มีสระบนอยู่ก่อน, ผสมเป็น glyph
-;     เดียวทับสระบนเดิมถ้ามีสระบนอยู่ที่แถว-1 แล้ว (ดูข้อ 1 ด้านบน)
-;   - สระล่าง 2 ตัว (D6,D7) -- ซ้อนแถว+1 เสมอ ไม่มีการผสม
-; โค้ดกลุ่ม 0x82-0x9D ที่เหลือ (นอกเหนือจาก 0x83-0x91 ที่ใช้เป็น combine output) ยังไม่ทราบ
-; ความหมายแน่ชัด (E7/ED/FC และตัวแปรอื่นในช่วงนี้) **ไม่ได้ทำการซ้อนพิเศษ** -- ปล่อยให้ BIOS
-; วาดแบบปกติ เป็นการตัดสินใจที่ตั้งใจ ไม่ใช่ข้อบกพร่องที่ลืม
+;   2. (แก้ใน 9.19) ตารางจัดกลุ่มเครื่องหมายเดิมผิด -- ฟอนต์เป็นรหัส TIS-620 (ยืนยันจาก pixel ของ
+;      font_raw.bin เอง): สระบน D1,D4,D5,D6,D7,E7,ED / วรรณยุกต์ E8-EC / สระล่าง D8,D9,DA
+;      (เดิมเข้าใจผิดว่า D6/D7 เป็นสระล่าง) ดูตารางจริงที่ UPPER_VOWEL_TABLE ด้านล่าง
+;   3. (9.19) ตัวแก้ไขบรรทัดของ BIOS อ่านบรรทัดกลับจากจอเฉพาะแถวกลาง -- INLIN_REBUILD ประกอบ BUF
+;      ใหม่ให้รวมแถวบน/ล่างด้วย + CHGE_HOOK คืน CSRY แถวจริงก่อนรอคีย์ทุกครั้ง (ดูท้ายไฟล์)
 ; ==========================================================================
 
 ; ---- PRINTHOOK_INSTALL / PRINTHOOK_UNINSTALL -----------------------------
@@ -89,6 +83,21 @@ PRINTHOOK_INSTALL:
 	ld (H_CHPUT+4),a
 	ld a,RST30_OPCODE
 	ld (H_CHPUT),a
+	; --- 9.19: hook เพิ่ม 3 ตัว (ดู INLIN_REBUILD / CHGE_HOOK ด้านล่าง) ---
+	xor a
+	ld (INLIN_ACTIVE),a
+	ld hl,H_CHGE
+	ld de,PREV_CHGE
+	ld bc,CHGE_HOOK
+	call HOOK_INSTALL
+	ld hl,H_PINL
+	ld de,PREV_PINL
+	ld bc,INLIN_HOOK
+	call HOOK_INSTALL
+	ld hl,H_INLI
+	ld de,PREV_INLI
+	ld bc,INLIN_HOOK
+	call HOOK_INSTALL
 	ei
 	ret
 
@@ -104,7 +113,112 @@ PRINTHOOK_UNINSTALL:
 	ld (H_CHPUT+3),a
 	ld a,(PREV_CHPUT+4)
 	ld (H_CHPUT+4),a
+	; --- 9.19: คืน hook 3 ตัวที่ติดตั้งเพิ่ม (ldir คืนไบต์ opcode ตัวแรกก่อนเสมอ ตามกติกาเดิม) ---
+	ld hl,PREV_CHGE
+	ld de,H_CHGE
+	ld bc,5
+	ldir
+	ld hl,PREV_PINL
+	ld de,H_PINL
+	ld bc,5
+	ldir
+	ld hl,PREV_INLI
+	ld de,H_INLI
+	ld bc,5
+	ldir
+	xor a
+	ld (INLIN_ACTIVE),a
 	ei
+	ret
+
+; ---- HOOK_INSTALL (9.19) ------------------------------------------------------
+; รูปแบบเดียวกับ PRINTHOOK_INSTALL ด้านบนทุกประการ แค่ทำเป็น routine กลาง
+; entry: HL = hook slot (5 ไบต์), DE = ที่สำรองเนื้อ hook เดิม (5 ไบต์), BC = handler
+; ผู้เรียกต้อง DI ไว้แล้ว -- เขียนไบต์ opcode (RST 30H) เป็นไบต์สุดท้าย ให้ทุกจังหวะที่ hook
+; อาจถูกเรียกระหว่างเขียนยังเป็นโค้ดที่ปลอดภัยเสมอ (กติกาเดียวกับ KEYC_INSTALL)
+HOOK_INSTALL:
+	push hl
+	push bc
+	ld bc,5
+	ldir                       ; สำรอง hook เดิม
+	pop bc
+	pop hl
+	push hl
+	inc hl
+	ld a,(MY_SLOT_ID)
+	ld (hl),a
+	inc hl
+	ld (hl),c
+	inc hl
+	ld (hl),b
+	inc hl
+	ld (hl),$C9                ; RET
+	pop hl
+	ld (hl),RST30_OPCODE
+	ret
+
+; ---- INLIN_HOOK (9.19) --------------------------------------------------------
+; ติดตั้งที่ทั้ง H_PINL และ H_INLI -- BIOS เรียกตอนเริ่มรับบรรทัดทุกแบบ (direct mode/โปรแกรม,
+; INPUT, LINE INPUT) แค่ตั้ง flag ว่า "กำลังรับบรรทัด" (เฉพาะตอน PRINTON เปิด) ให้ PRINTHOOK รู้ว่า
+; LF ตัวถัดไปคือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดจากจอเข้า BUF เสร็จแล้ว (ดู INLIN_REBUILD)
+INLIN_HOOK:
+	push af
+	ld a,(PRINT_MODE)
+	ld (INLIN_ACTIVE),a
+	pop af
+	ret
+
+; ---- CHGE_HOOK (9.19) ---------------------------------------------------------
+; H_CHGE ถูกเรียกตอนต้น CHGET ทุกครั้ง (MSX1/2/2+ ที่ $10CE เหมือนกัน) = ก่อนรอคีย์ถัดไป ก่อน
+; แสดง cursor -- จุดที่เร็วที่สุดหลัง BIOS วาดสระ/วรรณยุกต์ที่ตำแหน่งซ้อนเสร็จ
+; ปัญหาเดิม: PRINTHOOK คืน CSRY แถวจริง "ตอน CHPUT ครั้งถัดไป" เท่านั้น -- ถ้าตัวสุดท้ายที่พิมพ์ก่อน
+; กด Enter เป็นสระ/วรรณยุกต์ CSRY ยังค้างอยู่แถวบน/ล่าง ตอน BIOS อ่านบรรทัด (Enter ไม่ผ่าน CHPUT
+; ก่อนอ่าน) BIOS จะอ่านแถวผิดไปทั้งบรรทัด และ cursor กระพริบผิดแถว -- แก้โดย resync ที่นี่ด้วย
+; (+ แก้ glyph ผสมที่ค้างไว้ทันที ไม่ต้องรอคีย์ถัดไปแบบข้อจำกัดเดิมใน 9.18)
+CHGE_HOOK:
+	push hl
+	push de
+	push bc
+	push af
+	ld a,(PRINT_MODE)
+	or a
+	jr z,.chge_done
+	ld a,(PRINT_REDIRECT)
+	or a
+	jr z,.chge_nofix
+	ld a,(PRINT_ROW)
+	ld (CSRY),a
+	xor a
+	ld (PRINT_REDIRECT),a
+.chge_nofix:
+	call COMBINE_FIX
+.chge_done:
+	pop af
+	pop bc
+	pop de
+	pop hl
+	ret
+
+; ---- COMBINE_FIX ----------------------------------------------------------------
+; (แยกออกมาจาก PRINTHOOK ขั้น 1.6 เดิมเพื่อให้ CHGE_HOOK เรียกซ้ำได้ -- โค้ดเดิมทุกประการ)
+; ถ้ามี glyph ผสมค้างอยู่ (PRINT_COMBINE_PENDING) เขียนทับลง VRAM แล้วเคลียร์ flag
+; ทำลาย A/DE/HL (BC คงเดิม)
+COMBINE_FIX:
+	ld a,(PRINT_COMBINE_PENDING)
+	or a
+	ret z
+	xor a
+	ld (PRINT_COMBINE_PENDING),a
+	push bc
+	ld a,(PRINT_COMBINE_ROW)
+	ld d,a
+	ld a,(PRINT_COMBINE_COL)
+	ld e,a
+	ld a,d
+	call NAMETAB_ADDR
+	ld a,(PRINT_COMBINE_CODE)
+	call WRTVRM
+	pop bc
 	ret
 
 ; ---- PRINTHOOK -------------------------------------------------------------
@@ -163,22 +277,7 @@ PRINTHOOK:
 	; ตำแหน่งสระบนไปก่อน (ผิดชั่วคราว 1 จังหวะ) แล้วมาแก้ทับด้วย WRTVRM ตรงนี้ตอนเรียกครั้งถัดไป
 	; ก่อนประมวลผลตัวอักษรใหม่ใด ๆ เลย -- ไม่แตะ D/E เพราะยังไม่ถูกใช้งานตอนนี้ (กำหนดใหม่ทุกครั้ง
 	; ที่ขั้น 3/5 ด้านล่าง) จึงปลอดภัยที่จะใช้เป็น scratch ตรงนี้ได้อิสระ
-	ld a,(PRINT_COMBINE_PENDING)
-	or a
-	jr z,.no_combine_fix
-	xor a
-	ld (PRINT_COMBINE_PENDING),a
-	push bc
-	ld a,(PRINT_COMBINE_ROW)
-	ld d,a
-	ld a,(PRINT_COMBINE_COL)
-	ld e,a
-	ld a,d
-	call NAMETAB_ADDR
-	ld a,(PRINT_COMBINE_CODE)
-	call WRTVRM
-	pop bc
-.no_combine_fix:
+	call COMBINE_FIX                  ; (9.19: แยกเป็น routine ให้ CHGE_HOOK ใช้ร่วม -- BC คงเดิม)
 	; --- ขั้น 1.7 (ใหม่): Backspace ($08) ลบวรรณยุกต์ที่เพิ่งผสมไปเมื่อกี้ -- ต้องกลับไปแสดง
 	; สระบนเดิมเปล่า ๆ (ไม่ใช่ glyph ผสม) ผู้ใช้ยืนยันเอง: "ถ้าลบวรรณยุกต์ออกต้องกลับมาวาดสระบน"
 	; -- valid แค่ตัวถัดไปที่พิมพ์ "ทันที" หลังผสมเท่านั้น (ดู PRINT_LAST_MARK_* ใน equates.asm)
@@ -223,6 +322,16 @@ PRINTHOOK:
 	ld a,c
 	cp 10                          ; LF?
 	jr nz,.notlf
+	; --- 9.19: LF นี้คือ LF ที่ BIOS พิมพ์หลังอ่านบรรทัดจากจอเข้า BUF เสร็จหรือไม่ (ดู INLIN_HOOK) ---
+	; ถ้าใช่ ประกอบ BUF ใหม่จากจอโดยรวมแถวบน/ล่างเข้าไปด้วย ก่อนโก่ง CSRY +2 ด้านล่าง (ตอนนี้ CSRY
+	; ยังอยู่ที่แถวของบรรทัดที่เพิ่งอ่านพอดี -- BIOS ย้าย cursor ไปท้ายบรรทัดด้วย ESC Y ก่อนพิมพ์ LF)
+	ld a,(INLIN_ACTIVE)
+	or a
+	jr z,.lf_bump
+	xor a
+	ld (INLIN_ACTIVE),a
+	call INLIN_REBUILD
+.lf_bump:
 	ld a,(PRINT_MODE)
 	; หมายเหตุ: มาถึงจุดนี้ได้แปลว่า PRINT_MODE=TRUE แน่นอนอยู่แล้ว (เช็คตั้งแต่ต้น
 	; PRINTHOOK) แต่เช็คซ้ำเผื่อโค้ดข้างบนถูกแก้ในอนาคต -- ไม่เสียหาย
@@ -294,6 +403,7 @@ PRINTHOOK:
 	ld a,b
 	call COMBINE_LOOKUP           ; entry A=สระบน,C=วรรณยุกต์(ยังอยู่ตั้งแต่ต้นฟังก์ชัน) -> A=โค้ดผสม
 	                               ; ทำลาย B/C/HL (ไม่แตะ D/E -- D คือที่ที่เราสำรองสระบนไว้พอดี)
+	jp nc,.place_row_minus1       ; 9.19: ไม่มี glyph ผสมของคู่นี้ในฟอนต์ -- วางทับแถว-1 เฉย ๆ
 	ld (PRINT_COMBINE_CODE),a
 	ld a,(PRINT_ROW)
 	dec a
@@ -396,72 +506,92 @@ CLASSIFY_THAI_MARK:
 	pop hl
 	ret
 
-; สระบน 3 ตัว: D1,D4,D5 -- ยืนยันจาก disassembly ของ original ROM (table #3 ใน
-; printon_algorithm_report.md 1.4c/2.1) ว่าเป็นสมาชิกกลุ่ม "ซ้อนแถว-1" จริง และยืนยันซ้ำด้วย
-; pixel-match ตรงกับฟอนต์บิตแมปจริง (thaifont.asm ที่ผู้ใช้อัปโหลด -- แถวล่างของ glyph ผสม
-; 0x83-0x91 ตรงกับ glyph ของ D1/D4/D5 เดี่ยว ๆ เป๊ะทุกไบต์) *** แก้จากที่เข้าใจผิดไว้รอบแรกว่า
-; มี 5 ตัว (รวม D6,D7) -- ผู้ใช้แก้ไข + ฟอนต์บิตแมปจริงยืนยันตรงกันว่า D6,D7 คือสระล่าง (อุ/อู)
-; ไม่ใช่สระบน ย้ายไปอยู่ LOWER_VOWEL_TABLE ด้านล่างแทน ***
+; ---- ตารางจัดกลุ่มเครื่องหมายไทย (9.19: แก้ใหม่ทั้งชุดจาก pixel ของ font_raw.bin จริง) ----
+; ฟอนต์นี้คือรหัส TIS-620 มาตรฐาน (ก=$A1, ด=$B4, ว=$C7, ส=$CA ...) และตาราง keyboard ก็สร้างรหัส
+; ชุดเดียวกัน -- วาด glyph จาก font_raw.bin ออกมาดูทีละตัวแล้วพบว่า:
+;   สระบน/เครื่องหมายบน วาดชิด "ล่าง" ของช่อง (เพราะไปอยู่แถวเหนือพยัญชนะ):
+;     D1=ั  D4=ิ  D5=ี  D6=ึ  D7=ื  E7=็  ED=ํ
+;   วรรณยุกต์ วาดชิด "บน" ของช่อง: E8=่ E9=้ EA=๊ EB=๋ EC=์
+;   สระล่าง วาดชิด "บน" ของช่อง (เพราะไปอยู่แถวใต้พยัญชนะ): D8=ุ D9=ู DA=ฺ
+; *** 9.18 เดิมเข้าใจผิดว่า D6/D7 คือ ุ/ู (เชื่อ comment auto-generate ใน thaifont.asm ที่ label
+; เลื่อนผิดตำแหน่ง) ทำให้ ึ/ื ถูกวาดลงแถวล่าง และ ุ/ู (D8/D9 ของจริง) ไม่ถูกซ้อนเลย -- แก้แล้ว ***
 UPPER_VOWEL_TABLE:
-	db $D1,$D4,$D5
-UPPER_VOWEL_TABLE_LEN equ 3
+	db $D1,$D4,$D5,$D6,$D7,$E7,$ED
+UPPER_VOWEL_TABLE_LEN equ 7
 
-; สระล่าง 2 ตัว: อุ(D6) อู(D7) -- ผู้ใช้ยืนยันเอง ("◌ุ กับ ◌ู วาดที่ N+1") ตรงกับฟอนต์บิตแมป
-; จริงที่ผู้ใช้อัปโหลด (thaifont.asm) ที่ label โค้ดนี้ตรงตัวว่า "ุ"/"ู" พอดี -- ซ้อนแถว+1 (ใต้
-; พยัญชนะ) ไม่ใช่แถว-1 เหมือนสระบน และไม่มีการผสมกับวรรณยุกต์ (ดู .lower_vowel ใน PRINTHOOK)
 LOWER_VOWEL_TABLE:
-	db $D6,$D7
-LOWER_VOWEL_TABLE_LEN equ 2
+	db $D8,$D9,$DA
+LOWER_VOWEL_TABLE_LEN equ 3
 
-; วรรณยุกต์ 4 รูป: ่(E8) ้(E9) ๊(EA) ๋(EB) -- ยืนยัน E8/E9 จาก THAI_UNSHIFTED_TABLE
-; (scan code J,H) ส่วน EA/EB เป็นการอนุมานจากชุดวรรณยุกต์ไทยที่ทราบครบ (4 รูป
-; ตามลำดับ mai-ek,mai-tho,mai-tri,mai-chattawa) -- ยืนยันซ้ำด้วย pixel-match ตรงกับ thaifont.asm
-; (แถวบนของ glyph ผสม 0x83/0x88/0x8E ตรงกับ "08,08,00..." ของ E8 เป๊ะ เทียบ E9/EA/EB กับแถวบน
-; ของ 0x85/0x86/0x87 ก็ตรงเป๊ะเช่นกัน แม้ comment auto-generate ในไฟล์นั้นจะ label E8-EB เป็นเลข
-; ไทย ๐๑๒๓ ผิดก็ตาม -- pixel data ไม่โกหก)
 TONE_MARK_TABLE:
-	db $E8,$E9,$EA,$EB
-TONE_MARK_TABLE_LEN equ 4
+	db $E8,$E9,$EA,$EB,$EC
+TONE_MARK_TABLE_LEN equ 5
+
+; ---- COMBO_TABLE: glyph ที่ผสมสระบน+วรรณยุกต์ไว้แล้วในฟอนต์ (สระบนชิดล่าง + วรรณยุกต์ชิดบน)
+; เรียงเป็นชุดละ 3 ไบต์ (สระบน, วรรณยุกต์, โค้ดผสม) ปิดท้ายด้วย 0 -- ยืนยันด้วย pixel ทุกตัว: แถวล่าง
+; ของโค้ดผสมตรงกับสระบนเดี่ยว แถวบนตรงกับวรรณยุกต์เดี่ยว (ชุด D1/D4/D5 ตรงกับตารางเดิมของ 9.18
+; ทุกไบต์ ส่วน D6/D7/ED และ ิ+์ เพิ่มใหม่)
+COMBO_TABLE:
+	db $D1,$E8,$83, $D1,$E9,$85, $D1,$EA,$86, $D1,$EB,$87
+	db $D4,$E8,$88, $D4,$E9,$89, $D4,$EA,$8A, $D4,$EB,$8B, $D4,$EC,$8D
+	db $D5,$E8,$8E, $D5,$E9,$8F, $D5,$EA,$90, $D5,$EB,$91
+	db $D6,$E8,$92, $D6,$E9,$93, $D6,$EA,$94, $D6,$EB,$95
+	db $D7,$E8,$96, $D7,$E9,$97, $D7,$EA,$98, $D7,$EB,$99
+	db $ED,$E8,$9A, $ED,$E9,$9B, $ED,$EA,$9C, $ED,$EB,$9D
+	db 0
 
 ; ---- COMBINE_LOOKUP -----------------------------------------------------------
-; entry: A = โค้ดสระบน (ต้องเป็นสมาชิกของ UPPER_VOWEL_TABLE อยู่แล้ว -- ผู้เรียกยืนยันด้วย
-;        CLASSIFY_THAI_MARK ก่อนเรียกเสมอ), C = โค้ดวรรณยุกต์ (E8-EB)
-; exit:  A = โค้ด glyph ที่ผสมแล้ว (จาก COMBINE_TABLE ด้านล่าง) -- ทำลาย B/C/HL เท่านั้น
-;        *** ไม่แตะ D/E เลย *** (PRINTHOOK พึ่งพา E คงค่าคอลัมน์เป้าหมายตลอดทั้งฟังก์ชัน)
+; entry: A = สระบน, C = วรรณยุกต์
+; exit:  carry=1 + A = โค้ดผสม ถ้ามีในฟอนต์ / carry=0 ถ้าไม่มี -- ทำลาย B/HL เท่านั้น (ไม่แตะ C/D/E)
 COMBINE_LOOKUP:
-	ld hl,UPPER_VOWEL_TABLE
-	ld b,0                        ; B = ดัชนีสระ (0-based, นับผ่านตาราง)
-.find_vowel:
-	cp (hl)                       ; cp ไม่แตะ A -- แค่ตั้ง flag เทียบกับ (hl)
-	jr z,.found_vowel
-	inc hl
-	inc b
-	jr .find_vowel
-.found_vowel:
-	ld a,b
-	add a,a
-	add a,a                        ; A = ดัชนีสระ*4
 	ld b,a
-	ld a,c
-	sub $E8                         ; A = ดัชนีวรรณยุกต์ (0-3)
-	add a,b                         ; A = offset ใน COMBINE_TABLE
-	ld c,a
-	ld b,0
-	ld hl,COMBINE_TABLE
-	add hl,bc
+	ld hl,COMBO_TABLE
+.cl_loop:
 	ld a,(hl)
+	or a
+	ret z                          ; จบตาราง: ไม่พบ (or a เคลียร์ carry แล้ว)
+	cp b
+	jr nz,.cl_next
+	inc hl
+	ld a,(hl)
+	dec hl
+	cp c
+	jr nz,.cl_next
+	inc hl
+	inc hl
+	ld a,(hl)
+	scf
 	ret
+.cl_next:
+	inc hl
+	inc hl
+	inc hl
+	jr .cl_loop
 
-; COMBINE_TABLE -- โค้ด glyph ที่ผสมสระบน+วรรณยุกต์แล้ว เรียงตาม UPPER_VOWEL_TABLE (D1,D4,D5)
-; x TONE_MARK_TABLE (E8,E9,EA,EB) = 3x4 = 12 ไบต์ -- ยืนยันสองทาง: (1) disassembly ของ
-; original ROM เอง ($5582 ใน printon_algorithm_report.md section 1.5/2.1) และ (2) pixel-match
-; ตรงกับฟอนต์บิตแมปจริง (thaifont.asm ที่ผู้ใช้อัปโหลด -- แถวบน 2 แถวของแต่ละ glyph ตรงกับ
-; วรรณยุกต์เดี่ยว ๆ เป๊ะ, แถวล่างตรงกับสระบนเดี่ยว ๆ เป๊ะ ทุกไบต์) ผู้ใช้ยืนยันด้วยตนเองด้วย:
-; "ไม้หันอากาศ ไม้เอกต้องผสมกัน แล้ววาดแทนไม้หันอากาศเดิม ที่ N-1"
-COMBINE_TABLE:
-	db $83,$85,$86,$87    ; D1 + (E8,E9,EA,EB)
-	db $88,$89,$8A,$8B    ; D4 + (E8,E9,EA,EB)
-	db $8E,$8F,$90,$91    ; D5 + (E8,E9,EA,EB)
+; ---- DECOMBINE (9.19) -----------------------------------------------------------
+; ย้อนกลับของ COMBINE_LOOKUP: entry A = โค้ดใด ๆ
+; exit: carry=1 + A = สระบน, C = วรรณยุกต์ ถ้าเป็นโค้ดผสม / carry=0 ถ้าไม่ใช่ -- ทำลาย B/HL
+DECOMBINE:
+	ld b,a
+	ld hl,COMBO_TABLE
+.dc_loop:
+	ld a,(hl)
+	or a
+	ret z
+	inc hl
+	inc hl
+	ld a,(hl)                      ; โค้ดผสม
+	cp b
+	jr z,.dc_found
+	inc hl
+	jr .dc_loop
+.dc_found:
+	dec hl
+	ld c,(hl)                      ; วรรณยุกต์
+	dec hl
+	ld a,(hl)                      ; สระบน
+	scf
+	ret
 
 ; ---- NAMETAB_ADDR ------------------------------------------------------------
 ; คำนวณ VRAM address ของช่อง name table ที่ (แถว, คอลัมน์) -- สูตรตรงจาก
@@ -480,27 +610,203 @@ COMBINE_TABLE:
 ; SCREEN 0 อย่างเดียว) จึงชดเชยด้วยค่าคงที่ +1 ตรงนี้แทนการ port สูตร LINLEN ที่ซับซ้อน
 ; และผูกกับ SCRMOD=0 อยู่แล้วโดยธรรมชาติ (ถ้าในอนาคตรองรับ SCRMOD!=0 ต้องทบทวนใหม่)
 NAMETAB_ADDR:
-	dec a                        ; แถว -1 (0-based)
+	; 9.19: เขียนใหม่ให้ตรงกับ CALC_ADDR ของ BIOS ทุกรุ่นทุกโหมดข้อความ (disassemble ยืนยัน: MSX1 $0BF2,
+	; MSX2/MSX2+ $0B98 -- สูตรเดียวกัน) เดิมเป็น (แถว-1)*40+คอลัมน์+1 คงที่ ซึ่งถูกเฉพาะ SCREEN 0 WIDTH 37
+	; (MSX2+ ญี่ปุ่นบูตมาเป็น 80 คอลัมน์ -> PRINTON/การอ่านบรรทัดเพี้ยนทั้งหมด)
+	;   SCREEN 0, LINLEN<=40 : NAMPNT + (แถว-1)*40 + (คอลัมน์-1) + (41-LINLEN)/2
+	;   SCREEN 0, LINLEN>=41 : NAMPNT + (แถว-1)*80 + (คอลัมน์-1) + (81-LINLEN)/2   (MSX2 TEXT2)
+	;   SCREEN 1             : NAMPNT + (แถว-1)*32 + (คอลัมน์-1) + (33-LINLEN)/2
+	; entry: A = แถว (1-based), E = คอลัมน์ (1-based แบบ CSRX) -> HL = VRAM address
+	; ทำลาย A/BC เท่านั้น (DE คงเดิม)
+	push de
+	dec a
 	ld l,a
-	ld h,0                        ; HL = แถว(0-based)
-	add hl,hl                     ; *2
-	add hl,hl                     ; *4
-	add hl,hl                     ; *8
+	ld h,0
+	add hl,hl
+	add hl,hl
+	add hl,hl                     ; HL = แถว*8
 	ld b,h
 	ld c,l                        ; BC = แถว*8
-	add hl,hl                     ; *16
-	add hl,hl                     ; *32
-	add hl,bc                     ; HL = แถว*32 + แถว*8 = แถว*40
-	ld d,0                         ; DE = คอลัมน์ (E ตั้งไว้จากผู้เรียกแล้ว)
-	add hl,de                     ; HL += คอลัมน์
-	; *** บั๊กที่เจอ+แก้แล้ว: "LD DE,(NAMPNT)" ด้านล่างโหลดทั้ง D "และ" E ทับ (ไม่ใช่แค่ D)
-	; ทำให้ E (คอลัมน์เป้าหมายของผู้เรียก) ถูกเขียนทับเป็น low byte ของ NAMPNT (=0 ปกติ) --
-	; ผู้เรียก (PRINTHOOK ขั้น 5) ใช้ E ต่อหลัง call นี้เพื่อตั้ง CSRX เลยได้ค่าผิด (เจอจริงผ่าน
-	; breakpoint: วรรณยุกต์ที่ควรอยู่คอลัมน์เดียวกับพยัญชนะ กลับไปอยู่คอลัมน์ 0 เสมอ) แก้ด้วยการ
-	; push/pop DE ครอบขั้นตอนนี้เพื่อกันไม่ให้ E ของผู้เรียกเสียหาย
-	push de
+	add hl,hl
+	add hl,hl                     ; HL = แถว*32
+	ld d,0
+	dec e                         ; E = คอลัมน์-1
+	ld a,(SCRMOD)
+	or a
+	ld a,(LINLEN)
+	jr nz,.na_g32
+	cp 41
+	jr nc,.na_t80
+	add hl,bc                     ; แถว*40
+	sub 42
+	jr .na_fin
+.na_t80:
+	add hl,bc
+	add hl,hl                     ; แถว*80
+	sub 82
+	jr .na_fin
+.na_g32:
+	sub 34
+.na_fin:
+	cpl                           ; A = (K-1)-LINLEN
+	srl a                         ; /2 = ค่าเยื้องกึ่งกลางจอ
+	add a,e
+	ld e,a
+	add hl,de
 	ld de,(NAMPNT)
-	add hl,de                     ; HL += NAMPNT base
+	add hl,de
 	pop de
-	inc hl                         ; ค่าคงที่ที่ยืนยันแล้ว (ดู comment ด้านบน)
+	ret
+
+; ==========================================================================
+; ---- INLIN_REBUILD (9.19) -- เก็บสระบน/ล่าง/วรรณยุกต์เข้าบรรทัดที่พิมพ์ด้วย ----
+; ปัญหา (ผู้ใช้รายงาน): พิมพ์ 10 PRINT "สวัสดี" ตอน PRINTON แล้ว LIST/RUN ได้ "สวสด" -- เพราะตอนกด
+; Enter ตัวแก้ไขบรรทัดของ BIOS (INLIN, $245A ใน MSX1/2/2+ เหมือนกัน) อ่านบรรทัดกลับจาก VRAM เข้า BUF
+; "เฉพาะแถวที่ cursor อยู่" -- สระ/วรรณยุกต์ที่ PRINTON ย้ายไปวาดไว้แถวบน/ล่างจึงไม่ถูกอ่านเลย
+; วิธีแก้: หลัง BIOS อ่านเข้า BUF เสร็จ มันจะ ESC Y ย้าย cursor ไปท้ายบรรทัดแล้วพิมพ์ LF ($24B9) --
+; PRINTHOOK เห็น LF ตัวนั้น (INLIN_ACTIVE บอกว่าเป็น LF ตัวนี้จริง) แล้วเรียก routine นี้ประกอบ BUF
+; ใหม่จากจอ: ทีละคอลัมน์ = ตัวแถวกลาง, ตามด้วยสระล่างจากแถว+1, ตามด้วยสระบน/วรรณยุกต์จากแถว-1
+; (glyph ผสมแยกกลับเป็น สระบน+วรรณยุกต์) = ลำดับเก็บข้อความไทยปกติ (ส ว ั ส ด ี)
+; รับเฉพาะโค้ดที่เป็นเครื่องหมายจริงจากแถวบน/ล่าง (ตัวอื่นในแถวนั้นไม่เอา) และจำลองกติกาเดียวกับ BIOS:
+; เริ่มที่ FSTPOS ถ้าเป็นแถวเดียวกัน (ข้าม prompt ของ INPUT), ข้ามช่องที่เป็น 0, โค้ด <$20 เก็บเป็น
+; $01,โค้ด+$40, ตัดช่องว่างท้ายบรรทัด, ปิดด้วย 0
+; ข้อจำกัด: บรรทัดตรรกะที่ยาวเกิน 1 แถว (LINTTB บอกว่าต่อจากแถวก่อน) -> ปล่อย BUF ของ BIOS ไว้
+; ตามเดิม (ตอน PRINTON แถวถัดไปคือแถวสระล่าง การตัดบรรทัดจึงใช้ร่วมกับ PRINTON ไม่ได้อยู่แล้ว)
+; entry: CSRY = แถวของบรรทัดที่ BIOS เพิ่งอ่าน -- ทำลายทุก register (PRINTHOOK pop คืนเองที่ .done)
+INLIN_REBUILD:
+	ld a,(CSRY)
+	ld (RB_ROW),a
+	cp 2
+	jr c,.rb_single               ; แถว 1 ไม่มีแถวก่อนหน้า
+	ld e,a
+	ld d,0
+	ld hl,LINTTB-2
+	add hl,de                     ; HL = LINTTB entry ของแถว R-1 (LINTTB[0] = แถว 1)
+	ld a,(hl)
+	or a
+	ret z                         ; แถว R-1 ต่อเนื่องมาแถว R = บรรทัดหลายแถว -> ไม่ยุ่ง
+.rb_single:
+	ld hl,(FSTPOS)                ; L = แถว, H = คอลัมน์ที่เริ่มรับ
+	ld a,(RB_ROW)
+	cp l
+	ld a,1
+	jr nz,.rb_setcol
+	ld a,h
+.rb_setcol:
+	ld (RB_COL),a
+	ld de,BUF
+.rb_col:
+	ld a,(LINLEN)
+	ld b,a
+	ld a,(RB_COL)
+	dec a
+	cp b
+	jr nc,.rb_end                 ; คอลัมน์ > LINLEN -> จบ
+	; --- ตัวแถวกลาง ---
+	ld a,(RB_ROW)
+	call RB_READ
+	or a
+	jr z,.rb_lower                ; ช่องว่างจริง (0) -- BIOS ข้าม
+	cp $20
+	jr nc,.rb_plain
+	ld c,a                        ; control code: เก็บเป็น $01,โค้ด+$40 แบบ BIOS
+	ld a,1
+	call RB_EMIT
+	ld a,c
+	add a,$40
+.rb_plain:
+	call RB_EMIT
+.rb_lower:
+	; --- สระล่างจากแถว+1 ---
+	ld a,(CRTCNT)
+	ld b,a
+	ld a,(RB_ROW)
+	cp b
+	jr nc,.rb_upper               ; แถวล่างสุดของจอ ไม่มีแถว+1
+	inc a
+	call RB_READ
+	ld c,a
+	call CLASSIFY_THAI_MARK
+	cp 3
+	ld a,c
+	call z,RB_EMIT
+.rb_upper:
+	; --- สระบน/วรรณยุกต์จากแถว-1 ---
+	ld a,(RB_ROW)
+	cp 2
+	jr c,.rb_next
+	dec a
+	call RB_READ
+	ld c,a
+	call CLASSIFY_THAI_MARK
+	or a
+	jr z,.rb_combo
+	cp 3
+	jr z,.rb_next                 ; สระล่างในแถวบน -- ไม่ใช่ของบรรทัดนี้
+	ld a,c
+	call RB_EMIT                  ; สระบนเดี่ยว หรือ วรรณยุกต์เดี่ยว
+	jr .rb_next
+.rb_combo:
+	ld a,c
+	call DECOMBINE                ; -> A = สระบน, C = วรรณยุกต์
+	jr nc,.rb_next
+	call RB_EMIT
+	ld a,c
+	call RB_EMIT
+.rb_next:
+	ld hl,RB_COL
+	inc (hl)
+	jp .rb_col
+.rb_end:
+	; --- ตัดช่องว่างท้ายบรรทัด (ไม่ถอยเลยต้น BUF) แล้วปิดด้วย 0 ---
+.rb_trim:
+	ld a,e
+	cp BUF & $FF
+	jr nz,.rb_trim1
+	ld a,d
+	cp BUF >> 8
+	jr z,.rb_term
+.rb_trim1:
+	dec de
+	ld a,(de)
+	cp $20
+	jr z,.rb_trim
+	inc de
+.rb_term:
+	xor a
+	ld (de),a
+	ret
+
+; RB_READ: entry A = แถว (1-based), คอลัมน์จาก RB_COL -> exit A = โค้ดในช่องนั้น (คง BC/DE)
+RB_READ:
+	push bc
+	push de
+	ld b,a
+	ld a,(RB_COL)
+	ld e,a
+	ld a,b
+	call NAMETAB_ADDR
+	call RDVRM
+	pop de
+	pop bc
+	ret
+
+; RB_EMIT: entry A = ไบต์, DE = ตำแหน่งเขียนใน BUF -> เขียนแล้ว DE+1 (กันล้น: หยุดที่ 253 ไบต์
+; เหมือนขอบเขต B=$FE ของ BIOS) -- คง A/BC
+RB_EMIT:
+	push hl
+	push af
+	ld hl,BUF+253
+	or a
+	sbc hl,de
+	jr c,.re_full
+	jr z,.re_full
+	pop af
+	ld (de),a
+	inc de
+	pop hl
+	ret
+.re_full:
+	pop af
+	pop hl
 	ret

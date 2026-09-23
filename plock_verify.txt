@@ -1,0 +1,1 @@
+PRINT_MODE=0 PLOCK_MODE=255 (expect PRINT_MODE=0 since PLOCKON should block)

@@ -95,23 +95,23 @@ after realtime 6.9 {
     flush $outf
 }
 
-# ---- Test 3: สระล่าง D6(214) ต้องซ้อนแถว+1 (ใต้พยัญชนะ) ไม่ใช่แถว-1 ----
+# ---- Test 3: สระล่าง D8(216) ต้องซ้อนแถว+1 (ใต้พยัญชนะ) ไม่ใช่แถว-1 ----  (9.19: แก้จาก D6 -- pixel ของฟอนต์ยืนยันว่า ุ คือ D8/216, D6 คือ ึ สระบน)
 after realtime 7.2 { type_via_keybuf "cls\r" }
-after realtime 7.5 { type_via_keybuf "print chr\$(161)chr\$(214)\r" }
+after realtime 7.5 { type_via_keybuf "print chr\$(161)chr\$(216)\r" }
 after realtime 8.5 {
     global outf
-    set marks [scan_for {161 214}]
-    puts $outf "TEST3 (lower vowel D6 at row+1): $marks"
+    set marks [scan_for {161 216}]
+    puts $outf "TEST3 (lower vowel D8 at row+1): $marks"
     set ok 0
-    if {[count_code $marks 161]==1 && [count_code $marks 214]==1} {
+    if {[count_code $marks 161]==1 && [count_code $marks 216]==1} {
         set p161 [pos_of $marks 161]
-        set p214 [pos_of $marks 214]
+        set p216 [pos_of $marks 216]
         set r161 [lindex $p161 0]; set c161 [lindex $p161 1]
-        set r214 [lindex $p214 0]; set c214 [lindex $p214 1]
-        if {$c214==$c161 && $r214==$r161+1} { set ok 1 }
+        set r216 [lindex $p216 0]; set c216 [lindex $p216 1]
+        if {$c216==$c161 && $r216==$r161+1} { set ok 1 }
     }
     if {$ok} {
-        puts $outf "PASS: TEST3 -- สระล่าง D6 ซ้อนแถว+1 ถูกต้อง"
+        puts $outf "PASS: TEST3 -- สระล่าง D8 ซ้อนแถว+1 ถูกต้อง"
     } else {
         puts $outf "FAIL: TEST3"
     }

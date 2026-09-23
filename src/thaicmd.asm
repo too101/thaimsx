@@ -128,12 +128,26 @@ CMD_THAION:
 	ei
 	; เปิดใช้งานอีกครั้งด้วยกลไกใหม่ (RST 30H / CALLF แทน trampoline เดิม -- ดู comment เต็มที่
 	; KEYC_INSTALL ใน src/keyboard.asm) หลังปิดไปชั่วคราวตอนบั๊กข้อ 8 ยังไม่จบ
+	; *** 9.19: กันติดตั้งซ้ำ -- ROM นี้สั่ง CALL THAION เองตอนบูตอยู่แล้ว ถ้าผู้ใช้สั่ง THAION ซ้ำ
+	; installer จะสำรอง "hook ของเราเอง" ไว้เป็นค่าเดิม ทำให้ THAIOFF คืนค่ากลับเป็น hook ของเรา
+	; (ถอดไม่ออก) -- นี่คือที่มาของ "H_KEYC opcode after thaioff" ที่อ่านผิดใน 9.17 -- ถ้า H_CHPUT
+	; ชี้มาที่ PRINTHOOK อยู่แล้ว แปลว่าติดตั้งครบแล้ว ข้ามการติดตั้งทั้งชุด
+	ld a,(H_CHPUT)
+	cp RST30_OPCODE
+	jr nz,.thaion_install
+	ld hl,(H_CHPUT+2)
+	ld de,PRINTHOOK
+	or a
+	sbc hl,de
+	jr z,.thaion_done
+.thaion_install:
 	call KEYC_INSTALL
 	; ติดตั้ง PRINTON compositing hook ด้วย (ต้องเรียก "หลัง" KEYC_INSTALL เสมอ เพราะใช้
 	; MY_SLOT_ID ที่ KEYC_INSTALL คำนวณไว้ซ้ำ -- ดู comment เต็มที่ PRINTHOOK_INSTALL ใน
 	; src/printon.asm) -- ติดตั้งไว้ตลอดที่ THAION ไม่ผูกกับ PRINT_MODE โดยตรง เพราะตัว
 	; PRINTHOOK เองเช็ค PRINT_MODE ทุกครั้งอยู่แล้ว
 	call PRINTHOOK_INSTALL
+.thaion_done:
 	pop hl
 	jp STMT_DONE
 
