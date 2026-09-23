@@ -98,6 +98,19 @@ PRINTHOOK_INSTALL:
 	ld de,PREV_INLI
 	ld bc,INLIN_HOOK
 	call HOOK_INSTALL
+	; --- 9.21: cursor แยกสถานะไทย/อังกฤษ ---
+	xor a
+	ld (IN_CHGET),a
+	ld (CUR_WAITING),a
+	ld (CUR_ACTIVE),a
+	ld hl,H_DSPC
+	ld de,PREV_DSPC
+	ld bc,DSPC_HOOK
+	call HOOK_INSTALL
+	ld hl,H_ERAC
+	ld de,PREV_ERAC
+	ld bc,ERAC_HOOK
+	call HOOK_INSTALL
 	ei
 	ret
 
@@ -126,8 +139,17 @@ PRINTHOOK_UNINSTALL:
 	ld de,H_INLI
 	ld bc,5
 	ldir
+	ld hl,PREV_DSPC
+	ld de,H_DSPC
+	ld bc,5
+	ldir
+	ld hl,PREV_ERAC
+	ld de,H_ERAC
+	ld bc,5
+	ldir
 	xor a
 	ld (INLIN_ACTIVE),a
+	ld (CUR_WAITING),a
 	ei
 	ret
 
@@ -180,6 +202,8 @@ CHGE_HOOK:
 	push de
 	push bc
 	push af
+	ld a,TRUE
+	ld (IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
 	ld a,(PRINT_MODE)
 	or a
 	jr z,.chge_done
@@ -241,6 +265,8 @@ PRINTHOOK:
 	push de
 	push bc
 	push af
+	xor a
+	ld (IN_CHGET),a               ; 9.21: cursor ที่ CHPUT วาด (ถ้ามี) ไม่ใช่ cursor รอคีย์
 	ld a,(PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
@@ -1167,4 +1193,199 @@ RB_WRITE:
 	call WRTVRM
 	pop de
 	pop bc
+	ret
+
+; ==========================================================================
+; ---- 9.21: cursor แยกสถานะไทย/อังกฤษ ----
+; BIOS วาด cursor (MSX1 $09E6 / MSX2,2+ $0A43 -- โค้ดเหมือนกัน) โดย: อ่านตัวอักษรใต้ cursor เก็บที่
+; CURSAV, คัดลอก glyph ของมันมากลับสี (CSTYLE=0: ทั้ง 8 แถว / INS: 3 แถวล่าง) ลงเป็น glyph โค้ด 255
+; แล้วเขียน 255 ลงช่องนั้น -- ตอนลบ ($0A33/$0A90) เขียน CURSAV คืน
+; วิธีทำรูปของเราเอง: ใน H_DSPC (ก่อน BIOS วาด) เตรียม glyph 255 = รูปที่ต้องการแบบ "กลับสีล่วงหน้า"
+; แล้วเขียน 255 ลงช่องแทนตัวจริง -> BIOS อ่านได้ 255 กลับสีมันอีกรอบ = รูปที่ต้องการพอดี
+; ใน H_ERAC ใส่ตัวจริงคืนใน CURSAV ให้ BIOS เขียนคืนถูกตัว (ไม่ต้องพึ่ง internal address ใดเลย)
+;   อังกฤษ: ไม่ยุ่ง (cursor ทึบปกติ / INS = ขีดล่าง ตาม BIOS)
+;   ไทย   : กรอบสี่เหลี่ยมรอบตัวอักษร (ตัวอักษรยังอ่านออก) / INS = แถบตั้งด้านซ้าย
+; กดปุ่มสลับภาษาระหว่างรอคีย์ -> KEYC_HOOK วาด glyph 255 ใหม่ทันที (CUR_REDRAW)
+
+; DSPC_HOOK -- คงทุก register
+DSPC_HOOK:
+	push hl
+	push de
+	push bc
+	push af
+	ld a,(THAI_MODE)
+	or a
+	jr z,.dp_done
+	ld a,(SCRMOD)
+	cp 2
+	jr nc,.dp_done                ; ไม่ใช่โหมดข้อความ -- BIOS ไม่วาด cursor เอง
+	ld a,(CSRX)
+	ld e,a
+	ld a,(CSRY)
+	call NAMETAB_ADDR
+	push hl
+	call RDVRM
+	ld (CUR_REAL),a
+	ld a,(IN_CHGET)
+	ld (CUR_WAITING),a
+	xor a
+	ld (IN_CHGET),a
+	ld a,(INPUT_MODE)
+	or a
+	jr z,.dp_pop                  ; สถานะอังกฤษ -- ให้ BIOS วาดแบบปกติ
+	ld a,3                        ; รูปไทย + กลับสีล่วงหน้าให้ BIOS
+	call CUR_BUILD
+	pop hl
+	ld a,$FF
+	call WRTVRM
+	ld a,TRUE
+	ld (CUR_ACTIVE),a
+	jr .dp_done
+.dp_pop:
+	pop hl
+.dp_done:
+	pop af
+	pop bc
+	pop de
+	pop hl
+	ret
+
+; ERAC_HOOK -- คงทุก register
+ERAC_HOOK:
+	push af
+	xor a
+	ld (CUR_WAITING),a
+	ld a,(CUR_ACTIVE)
+	or a
+	jr z,.er_done
+	xor a
+	ld (CUR_ACTIVE),a
+	ld a,(CUR_REAL)
+	ld (CURSAV),a
+.er_done:
+	pop af
+	ret
+
+; CUR_REDRAW -- เรียกจาก KEYC_HOOK (ใน interrupt) หลังสลับภาษา: ถ้า cursor รอคีย์แสดงอยู่ วาด glyph
+; 255 ใหม่ตามสถานะปัจจุบัน -- ช่วงนี้โค้ดหลักวนรอคีย์อยู่ ไม่ได้ใช้ VDP ยกเว้นตอน BIOS วาดป้าย function
+; key ใหม่เพราะ SHIFT เปลี่ยน ($0D6A) จึงข้ามถ้ามีงานนั้นค้างอยู่ -- คงทุก register
+CUR_REDRAW:
+	push hl
+	push de
+	push bc
+	push af
+	ld a,(CUR_WAITING)
+	or a
+	jr z,.cr_done
+	ld a,(CNSDFG)
+	or a
+	jr z,.cr_go
+	ld a,(FNKSWI)
+	ld hl,SHIFT_STATE
+	xor (hl)
+	and 1
+	jr nz,.cr_done
+.cr_go:
+	ld a,(INPUT_MODE)
+	or a
+	ld a,1                        ; ไทย: รูปไทยตรง ๆ
+	jr nz,.cr_build
+	ld a,2                        ; อังกฤษ: รูปมาตรฐานของ BIOS (กลับสีตาม CSTYLE)
+.cr_build:
+	call CUR_BUILD
+.cr_done:
+	pop af
+	pop bc
+	pop de
+	pop hl
+	ret
+
+; CUR_BUILD: สร้าง glyph 255 จาก glyph ของ CUR_REAL
+; entry A: bit0 = ใส่รูปไทย (กรอบ / INS: แถบซ้าย), bit1 = กลับสีแบบ BIOS (ทั้งหมด หรือ 3 แถวล่างถ้า
+; CSTYLE!=0) -- ทำลายทุก register ใช้ stack 8 ไบต์เป็น buffer (ไม่ใช้ LINWRK ของ BIOS)
+CUR_BUILD:
+	ld c,a
+	ld hl,-8
+	add hl,sp
+	ld sp,hl
+	ex de,hl                      ; DE = buffer
+	push de
+	push bc
+	ld a,(CUR_REAL)
+	ld l,a
+	ld h,0
+	add hl,hl
+	add hl,hl
+	add hl,hl
+	ld bc,(CGPNT)
+	add hl,bc
+	ld bc,8
+	call LDIRMV                   ; glyph ตัวจริง -> buffer
+	pop bc
+	pop hl
+	push hl
+	ld b,0                        ; B = แถว 0..7
+.cb_row:
+	ld a,(hl)
+	bit 0,c
+	jr z,.cb_inv
+	ld d,a
+	ld a,(CSTYLE)
+	or a
+	jr nz,.cb_bar
+	ld a,b
+	or a
+	jr z,.cb_edge
+	cp 7
+	jr z,.cb_edge
+	ld a,(SCRMOD)                 ; ขอบซ้าย+ขวา: SCREEN 0 กว้าง 6 จุด (bit7..2), SCREEN 1 8 จุด
+	or a
+	ld a,$84
+	jr z,.cb_x
+	ld a,$81
+	jr .cb_x
+.cb_edge:
+	ld a,(SCRMOD)                 ; ขอบบน/ล่าง: เต็มความกว้างที่มองเห็น
+	or a
+	ld a,$FC
+	jr z,.cb_x
+	ld a,$FF
+	jr .cb_x
+.cb_bar:
+	ld a,$C0                      ; INS ไทย: แถบตั้งด้านซ้าย 2 จุด
+.cb_x:
+	xor d
+.cb_inv:
+	bit 1,c
+	jr z,.cb_store
+	ld d,a
+	ld a,(CSTYLE)
+	or a
+	ld a,b
+	jr z,.cb_all
+	cp 5                          ; CSTYLE!=0: BIOS กลับสีแค่แถว 5-7
+	ld a,d
+	jr c,.cb_store
+	cpl
+	jr .cb_store
+.cb_all:
+	ld a,d
+	cpl
+.cb_store:
+	ld (hl),a
+	inc hl
+	inc b
+	ld a,b
+	cp 8
+	jr nz,.cb_row
+	ld hl,(CGPNT)
+	ld de,$07F8
+	add hl,de
+	ex de,hl                      ; DE = VRAM ของ glyph 255
+	pop hl                        ; HL = buffer
+	ld bc,8
+	call LDIRVM
+	ld hl,8
+	add hl,sp
+	ld sp,hl
 	ret

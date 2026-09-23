@@ -191,6 +191,18 @@ PRINT_IN_LF    equ $FD34  ; 1 ไบต์ flag (9.20): PRINTHOOK กำลั�
 ; ---- 9.20: โค้ดส่วนตัวที่ KEYC_HOOK ดันเข้าคิวแทน BS/DEL ระหว่างรับบรรทัดขณะ PRINTON (ดู THAI_BS ใน
 ; printon.asm) -- INLIN ส่ง control code ที่ไม่อยู่ในตาราง dispatch ของมันไป CHPUT ตรง ๆ ($2428)
 ; และ CHPUT เองไม่ทำอะไรกับโค้ดเหล่านี้ PRINTHOOK จึงได้จัดการ BS/DEL แบบรู้จักแถวสระบน/ล่างเอง
+; ---- 9.21: cursor แยกสถานะไทย/อังกฤษ (ดู CUR_BUILD ใน printon.asm) ----
+IN_CHGET       equ $FD35  ; 1 ไบต์: CHGE_HOOK ตั้ง = กำลังจะวาด cursor รอคีย์ใน CHGET
+CUR_WAITING    equ $FD36  ; 1 ไบต์: cursor ของ CHGET แสดงอยู่ (ระหว่าง DSPC..ERAC) -- วาดใหม่ตอนกดสลับภาษาได้
+CUR_ACTIVE     equ $FD37  ; 1 ไบต์: เราแทนช่อง cursor ด้วยโค้ด 255 เอง -- ERAC ต้องคืนตัวจริงให้ BIOS
+CUR_REAL       equ $FD38  ; 1 ไบต์: ตัวอักษรจริงใต้ cursor
+PREV_DSPC      equ $FD39  ; 5 ไบต์ ($FD39-$FD3D)
+PREV_ERAC      equ $FD3E  ; 5 ไบต์ ($FD3E-$FD42)
+H_DSPC         equ $FDA9  ; hook ต้น routine แสดง cursor (MSX1 $09E6, MSX2/2+ $0A43 -- logic เหมือนกัน)
+H_ERAC         equ $FDAE  ; hook ต้น routine ลบ cursor (MSX1 $0A33, MSX2/2+ $0A90)
+CURSAV         equ $FBCC  ; ตัวอักษรใต้ cursor ที่ BIOS เก็บไว้เขียนคืนตอนลบ cursor
+CSTYLE         equ $FCAA  ; รูป cursor ของ BIOS: 0 = ทึบ 8 แถว, อื่น = ขีดล่าง 3 แถว (โหมด INS)
+FNKSWI         equ $FBCD  ; สถานะ SHIFT ตอนวาดป้าย function key ล่าสุด (BIOS วาดป้ายใหม่ถ้าต่างจากตอนนี้)
 THAI_BS_CODE   equ $10
 THAI_DEL_CODE  equ $11
 KEY_BS_SCAN    equ $3D    ; matrix แถว 7 bit 5

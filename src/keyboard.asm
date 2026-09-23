@@ -520,6 +520,7 @@ KEYC_HOOK_REAL:
 	and $80
 	or c
 	out ($A1),a
+	call CUR_REDRAW           ; 9.21: เปลี่ยนรูป cursor ทันที (คงทุก register)
 	ld a,SAFE_DISPATCH_A      ; *** บั๊กจริงข้อ 10 -- เหมือนกับ .lookup ด้านบน (ค่า A จาก OUT ($A1)
 	                          ; เป็นขยะสำหรับตาราง dispatch ของ BIOS ต้องเขียนทับก่อน SCF เสมอ) ***
 	scf                       ; carry=1 = "จัดการคีย์นี้แล้ว"
