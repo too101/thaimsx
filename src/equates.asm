@@ -205,6 +205,23 @@ CURSAV         equ $FBCC  ; ตัวอักษรใต้ cursor ที่ B
 CSTYLE         equ $FCAA  ; รูป cursor ของ BIOS: 0 = ทึบ 8 แถว, อื่น = ขีดล่าง 3 แถว (โหมด INS)
 FNKSWI         equ $FBCD  ; สถานะ SHIFT ตอนวาดป้าย function key ล่าสุด (BIOS วาดป้ายใหม่ถ้าต่างจากตอนนี้)
 PREV_READ      equ $FD43  ; 5 ไบต์ ($FD43-$FD47): hook H.READ เดิม ก่อนติดตั้ง BOOT_HOOK (9.22)
+; ---- 9.25: บรรทัดยาวต่อแถว (continuation) ขณะ PRINTON -- ดู WRAP_FIX ใน printon.asm ----
+WRAP_PENDING   equ $FD48  ; 1 ไบต์: เพิ่งพิมพ์ตัวปกติลงคอลัมน์สุดท้าย -> BIOS จะตัดขึ้นแถวถัดไป (แถว+1)
+GHOST_PENDING  equ $FD49  ; 1 ไบต์: วาดสระของตัวคอลัมน์สุดท้ายเอง แล้วปล่อย BIOS วาดตัวหลอกที่ cursor
+GHOST_ROW      equ $FD4A
+GHOST_COL      equ $FD4B
+GHOST_CHAR     equ $FD4C  ; ตัวเดิมในช่องที่ BIOS วาดตัวหลอกทับ -- เขียนคืนตอน resync
+MARK_ROW       equ $FD4D  ; แถวของตัวที่สระ/วรรณยุกต์จะไปเกาะ (อาจเป็นแถวก่อนหน้าถ้าเพิ่งต่อแถว)
+DC_ROW         equ $FD4E  ; แถวที่ DELCOL/INSCOL กำลังทำงาน
+RB_M           equ $FD4F  ; แถวที่กด Enter (INLIN_REBUILD)
+IC_CARRY       equ $FD51  ; 3 ไบต์ ($FD51-$FD53): ตัวที่ล้นจากคอลัมน์สุดท้ายตอนแทรก (บน/กลาง/ล่าง)
+LT_TMP         equ $FD54  ; 1 ไบต์ scratch ของ LT_SET
+THAI_INS       equ $FD50  ; โหมด INS ของเราเอง ขณะ PRINTON (ดู CHGE_HOOK) -- BIOS เห็น INSFLG=0 ตลอด
+; LINTTB marker: ค่าไม่เป็น 0 (BIOS ถือว่า "ไม่ต่อแถว") แต่เราใช้บอกว่าแถวข้อความนี้ต่อไป/ต่อมาจากแถว
+; ข้อความที่ห่าง 3 แถว (ข้ามแถวสระล่าง+สระบน) -- ค่าใน LINTTB เลื่อนตามเวลา BIOS scroll จอเอง
+LT_MARK        equ $50
+LT_DOWN        equ 1      ; แถวนี้ต่อไปที่ แถว+3
+LT_UP          equ 2      ; แถวนี้ต่อมาจาก แถว-3
 THAI_BS_CODE   equ $10
 THAI_DEL_CODE  equ $11
 KEY_BS_SCAN    equ $3D    ; matrix แถว 7 bit 5

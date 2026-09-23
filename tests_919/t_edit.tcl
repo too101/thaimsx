@@ -14,7 +14,7 @@ after time 13 {
     set cy [rd 0xF3DC]
     log "line10 row=$target cursor row=$cy"
     set k {}
-    for {set i 0} {$i < $cy - $target} {incr i} { lappend k 0x1E }
+    for {set i 0} {$i < ($cy - $target)/3} {incr i} { lappend k 0x1E }
     lappend k 13
     kpush $k
 }
