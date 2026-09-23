@@ -424,6 +424,28 @@ KEYC_HOOK_REAL:
 	ld a,c
 	cp KEYC_TOGGLE_CODE
 	jr z,.toggle
+	; --- 9.20: BS/DEL ระหว่างรับบรรทัดขณะ PRINTON -> ดันโค้ดส่วนตัวแทน ให้ PRINTHOOK ลบพร้อมสระบน/ล่าง ---
+	; (INLIN_ACTIVE ตั้งเฉพาะตอน PRINTON เปิดและ BIOS กำลังรับบรรทัด -- นอกนั้น BS/DEL ปกติทุกประการ)
+	cp KEY_BS_SCAN
+	jr z,.bsdel
+	cp KEY_DEL_SCAN
+	jr nz,.not_bsdel
+.bsdel:
+	ld a,(INLIN_ACTIVE)
+	or a
+	jr z,.not_bsdel
+	ld a,(SHIFT_STATE)
+	bit 1,a
+	jr z,.not_bsdel             ; CTRL กดอยู่ -- ปล่อยผ่าน
+	ld a,c
+	cp KEY_BS_SCAN
+	ld a,THAI_BS_CODE
+	jr z,.bsdel_push
+	ld a,THAI_DEL_CODE
+.bsdel_push:
+	call QUEUE_PUSH_CHAR
+	jr .push_after
+.not_bsdel:
 
 	; --- ส่วนที่ 2: พิมพ์อักษรไทยแบบเรียบ (ดูหัวข้อ 5) ---
 	ld a,(THAI_MODE)
@@ -468,6 +490,7 @@ KEYC_HOOK_REAL:
 	cp $FF
 	jr z,.passthrough          ; คีย์นี้ไม่มี mapping ไทยในต้นฉบับ -- ปล่อยผ่าน (ดูหัวข้อ 5.2)
 	call QUEUE_PUSH_CHAR        ; ดัน font code ของอักษรไทยเข้าคิวคีย์บอร์ด
+.push_after:
 	pop hl                      ; *** คืน HL ให้ตรงเดิมเสมอ (บั๊กจริงข้อ 1) ***
 	ld a,SAFE_DISPATCH_A        ; *** บั๊กจริงข้อ 10 -- ต้องกำหนด A ให้ปลอดภัยก่อน SCF เสมอ ***
 	scf                         ; carry=1 = "จัดการคีย์นี้แล้ว" (BIOS ยังเดินตาราง dispatch เองต่อ

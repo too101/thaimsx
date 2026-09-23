@@ -187,6 +187,17 @@ INLIN_ACTIVE   equ $FD31  ; 1 ไบต์ flag: TRUE = BIOS กำลังร�
                           ; BUF เสร็จ (ยืนยันจาก disassembly: MSX1/MSX2/MSX2+ ที่ $24B9 เหมือนกันทั้ง 3 รุ่น)
 RB_ROW         equ $FD32  ; 1 ไบต์ scratch ของ INLIN_REBUILD: แถว (1-based) ของบรรทัดที่อ่าน
 RB_COL         equ $FD33  ; 1 ไบต์ scratch ของ INLIN_REBUILD: คอลัมน์ (1-based) ที่กำลังอ่าน
+PRINT_IN_LF    equ $FD34  ; 1 ไบต์ flag (9.20): PRINTHOOK กำลังเรียก CHPUT(LF) ซ้อนเองเพื่อ scroll -- ตัวซ้อนปล่อยผ่าน
+; ---- 9.20: โค้ดส่วนตัวที่ KEYC_HOOK ดันเข้าคิวแทน BS/DEL ระหว่างรับบรรทัดขณะ PRINTON (ดู THAI_BS ใน
+; printon.asm) -- INLIN ส่ง control code ที่ไม่อยู่ในตาราง dispatch ของมันไป CHPUT ตรง ๆ ($2428)
+; และ CHPUT เองไม่ทำอะไรกับโค้ดเหล่านี้ PRINTHOOK จึงได้จัดการ BS/DEL แบบรู้จักแถวสระบน/ล่างเอง
+THAI_BS_CODE   equ $10
+THAI_DEL_CODE  equ $11
+KEY_BS_SCAN    equ $3D    ; matrix แถว 7 bit 5
+KEY_DEL_SCAN   equ $43    ; matrix แถว 8 bit 3
+ESCCNT         equ $FCA7  ; ตัวนับ ESC sequence ของ CHPUT (ไม่เป็น 0 = กำลังรับพารามิเตอร์ ESC)
+INSFLG         equ $FCA8  ; โหมด insert ของตัวแก้ไขบรรทัด (documented)
+CNSDFG         equ $F3DE  ; 0 = ไม่แสดง function key, $FF = แสดง (แถวล่างสุดใช้ไม่ได้)
 
 ; ---- hook / system variable ที่ใช้เพิ่ม (documented ทั้งหมด -- MSX Technical Handbook) ----
 H_PINL      equ $FDDB   ; hook ต้น PINLIN (บรรทัดคำสั่ง/โปรแกรมใน direct mode)

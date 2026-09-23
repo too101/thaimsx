@@ -241,6 +241,9 @@ PRINTHOOK:
 	push de
 	push bc
 	push af
+	ld a,(PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
+	or a
+	jp nz,.done
 	ld a,(PRINT_MODE)
 	or a
 	jp z,.done                 ; PRINTON ยังไม่เปิด -- ปล่อยผ่าน ไม่ทำอะไรเลย (jp เพราะ .done
@@ -278,6 +281,12 @@ PRINTHOOK:
 	; ก่อนประมวลผลตัวอักษรใหม่ใด ๆ เลย -- ไม่แตะ D/E เพราะยังไม่ถูกใช้งานตอนนี้ (กำหนดใหม่ทุกครั้ง
 	; ที่ขั้น 3/5 ด้านล่าง) จึงปลอดภัยที่จะใช้เป็น scratch ตรงนี้ได้อิสระ
 	call COMBINE_FIX                  ; (9.19: แยกเป็น routine ให้ CHGE_HOOK ใช้ร่วม -- BC คงเดิม)
+	; --- 9.20: BS/DEL ของตัวแก้ไขบรรทัดขณะ PRINTON (KEYC_HOOK ส่งมาเป็นโค้ดส่วนตัว) ---
+	ld a,c
+	cp THAI_BS_CODE
+	jp z,.thai_bs
+	cp THAI_DEL_CODE
+	jp z,.thai_del
 	; --- ขั้น 1.7 (ใหม่): Backspace ($08) ลบวรรณยุกต์ที่เพิ่งผสมไปเมื่อกี้ -- ต้องกลับไปแสดง
 	; สระบนเดิมเปล่า ๆ (ไม่ใช่ glyph ผสม) ผู้ใช้ยืนยันเอง: "ถ้าลบวรรณยุกต์ออกต้องกลับมาวาดสระบน"
 	; -- valid แค่ตัวถัดไปที่พิมพ์ "ทันที" หลังผสมเท่านั้น (ดู PRINT_LAST_MARK_* ใน equates.asm)
@@ -285,8 +294,9 @@ PRINTHOOK:
 	cp 8                              ; BS?
 	jr nz,.notbs
 	ld a,(PRINT_LAST_MARK_VALID)
-	or a
-	jr z,.notbs                       ; ไม่มีการผสมค้างให้ undo -- ปล่อยผ่าน BS ตามปกติ
+	cp TRUE
+	jr nz,.notbs                      ; ไม่มีการผสมค้างให้ undo -- ปล่อยผ่าน BS ตามปกติ
+	                                  ; (9.20: ค่า 1 = เครื่องหมายเดี่ยว ใช้เฉพาะ BS ของตัวแก้ไขบรรทัด)
 	xor a
 	ld (PRINT_LAST_MARK_VALID),a
 	push bc
@@ -337,9 +347,38 @@ PRINTHOOK:
 	; PRINTHOOK) แต่เช็คซ้ำเผื่อโค้ดข้างบนถูกแก้ในอนาคต -- ไม่เสียหาย
 	or a
 	jr z,.notlf
+	; 9.20: ขึ้นบรรทัดใหม่ = 3 แถวเสมอ แม้อยู่ใกล้ขอบล่าง (เดิมข้ามการโก่งแล้ว BIOS scroll ทีละแถว
+	; ทำให้ layout 3 แถวพัง) -- แถวใหม่ T ต้องมีแถวสระล่าง (T+1) อยู่ในจอ: T <= ล่างสุด-1
+	;   R+3 <= B-1 : โก่ง CSRY +2 แล้วให้ BIOS +1 เหมือนเดิม
+	;   ไม่งั้น   : ย้าย cursor ไปแถวล่างสุด B แล้วเรียก CHPUT(LF) เองซ้ำ s = R+4-B ครั้ง (BIOS scroll
+	;               ให้ครั้งละแถว พร้อมดูแล LINTTB เอง) แล้ววาง CSRY=B-2 ให้ LF ของ BIOS พาไป B-1
+	call GET_BOTTOM
+	ld b,a
 	ld a,(CSRY)
-	cp 22
-	jr nc,.notlf                  ; CSRY>=22 -- ใกล้ขอบล่างเกินไป ข้ามการโก่ง (ข้อจำกัดที่ทราบ)
+	add a,4
+	cp b
+	jr z,.lf_simple
+	jr c,.lf_simple
+	sub b
+	ld b,a                        ; B = จำนวนแถวที่ต้อง scroll
+	call GET_BOTTOM
+	ld (CSRY),a
+	ld a,TRUE
+	ld (PRINT_IN_LF),a
+.lf_scroll:
+	push bc
+	ld a,10
+	call CHPUT
+	pop bc
+	djnz .lf_scroll
+	xor a
+	ld (PRINT_IN_LF),a
+	call GET_BOTTOM
+	sub 2
+	ld (CSRY),a
+	jp .done
+.lf_simple:
+	ld a,(CSRY)
 	add a,2
 	ld (CSRY),a
 	jp .done
@@ -350,6 +389,9 @@ PRINTHOOK:
 	; UPPER_VOWEL_TABLE ไปเป็น LOWER_VOWEL_TABLE แยกต่างหาก (ดูรายละเอียดที่ตาราง 2 ชุดด้านล่าง)
 	ld a,c
 	call CLASSIFY_THAI_MARK      ; ไม่แตะ DE เลย (push/pop HL,BC ภายในตัวเอง)
+	push af
+	call INS_FIX                 ; 9.20: โหมด insert ของตัวแก้ไขบรรทัด (คง BC/DE)
+	pop af
 	or a
 	jp z,.done                  ; ตัวอักษรปกติ -- ไม่ต้องยักย้ายอะไร ปล่อย BIOS วาดตามปกติ
 	ld b,a                       ; B = class (1/2/3) -- เก็บชั่วคราว
@@ -430,10 +472,13 @@ PRINTHOOK:
 .lower_vowel:
 	; class=3 (สระล่าง อุ/อู) -- ซ้อนแถว+1 เสมอ (ใต้พยัญชนะ) ไม่มีการผสมกับวรรณยุกต์ใด ๆ (วรรณยุกต์
 	; อยู่คนละตำแหน่ง -- เหนือพยัญชนะ ไม่เกี่ยวกับสระล่าง) ผู้ใช้ยืนยันเอง: "◌ุ กับ ◌ู วาดที่ N+1"
+	call GET_BOTTOM
+	ld b,a
 	ld a,(PRINT_ROW)
-	add a,1
-	cp 25                         ; เกินขอบล่างจอ (24 แถว, CSRY 1-based สูงสุด=24)?
-	jp nc,.done                   ; กันเหนียว ไม่ซ้อนถ้าเกินขอบจอ
+	cp b                          ; 9.20: แถว+1 ต้องไม่เลยแถวล่างสุดที่ใช้ได้ (ไม่ทับแถว function key)
+	jp nc,.done
+	inc a
+	call NOTE_LAST_MARK
 	ld (CSRY),a
 	ld a,e
 	ld (CSRX),a
@@ -448,11 +493,47 @@ PRINTHOOK:
 	dec a
 	jp m,.done                   ; แถวติดลบ (บนสุดจอพอดี) -- กันเหนียว ไม่ซ้อน
 	jp z,.done                   ; แถว=0 ก็ผิดปกติเช่นกัน (CSRY เป็น 1-based)
+	call NOTE_LAST_MARK
 	ld (CSRY),a
 	ld a,e
 	ld (CSRX),a
 	ld a,TRUE
 	ld (PRINT_REDIRECT),a
+	jp .done
+
+; --- 9.20: BS ของตัวแก้ไขบรรทัดขณะ PRINTON ---
+;  ถ้าเพิ่งพิมพ์สระ/วรรณยุกต์ไปทันที -> ลบเฉพาะเครื่องหมายตัวนั้น (คืนค่าช่องเดิม: ว่าง หรือสระบนก่อนผสม)
+;  ไม่งั้น -> ลบทั้งช่อง (ตัวแถวกลาง + สระบน/วรรณยุกต์ + สระล่าง ของคอลัมน์นั้น) เลื่อนทั้ง 3 แถวไปทางซ้าย
+;  แล้วถอย cursor 1 ช่อง -- ข้อมูลที่เก็บจึงหายไปด้วย เพราะ INLIN_REBUILD อ่านจากจอตอนกด Enter
+.thai_bs:
+	ld a,(PRINT_LAST_MARK_VALID)
+	or a
+	jr z,.tbs_col
+	xor a
+	ld (PRINT_LAST_MARK_VALID),a
+	ld a,(PRINT_LAST_MARK_COL)
+	ld e,a
+	ld a,(PRINT_LAST_MARK_ROW)
+	call NAMETAB_ADDR
+	ld a,(PRINT_LAST_MARK_VOWEL)
+	call WRTVRM
+	jp .done
+.tbs_col:
+	ld a,(CSRX)
+	dec a
+	jp z,.done                    ; ต้นบรรทัด -- ไม่มีอะไรให้ลบ
+	ld e,a
+	call DELCOL
+	ld a,e
+	ld (CSRX),a
+	jp .done
+; --- 9.20: DEL = ลบทั้งช่องที่ cursor (cursor ไม่ขยับ) ---
+.thai_del:
+	xor a
+	ld (PRINT_LAST_MARK_VALID),a
+	ld a,(CSRX)
+	ld e,a
+	call DELCOL
 
 .done:
 	pop af
@@ -809,4 +890,281 @@ RB_EMIT:
 .re_full:
 	pop af
 	pop hl
+	ret
+
+; ==========================================================================
+; ---- 9.20: ตัวช่วยสำหรับ scroll 3 แถว / BS-DEL-INSERT ที่รู้จักแถวสระบน/ล่าง ----
+; ==========================================================================
+
+; GET_BOTTOM: A = แถวล่างสุดที่ข้อความใช้ได้ = CRTCNT + CNSDFG (CNSDFG=$FF ตอนแสดง function key
+; -> ลบ 1) สูตรเดียวกับ BIOS ($0C32) -- คงทุก register ยกเว้น A/F
+GET_BOTTOM:
+	push hl
+	ld a,(CNSDFG)
+	ld hl,CRTCNT
+	add a,(hl)
+	pop hl
+	ret
+
+; NOTE_LAST_MARK: จำ "ค่าเดิมของช่อง" ที่กำลังจะถูกวาดสระ/วรรณยุกต์ทับ ไว้ให้ BS ถัดไปทันทีคืนค่าได้
+; entry: A = แถวที่จะวาด, E = คอลัมน์ -- คงทุก register (ถ้าเพิ่งผสม glyph ไว้แล้ว = TRUE ไม่ทับ)
+NOTE_LAST_MARK:
+	push af
+	ld a,(PRINT_LAST_MARK_VALID)
+	or a
+	jr nz,.nl_keep
+	pop af
+	push af
+	ld (PRINT_LAST_MARK_ROW),a
+	push bc
+	push de
+	push hl
+	call NAMETAB_ADDR
+	call RDVRM
+	ld (PRINT_LAST_MARK_VOWEL),a
+	pop hl
+	pop de
+	pop bc
+	ld a,e
+	ld (PRINT_LAST_MARK_COL),a
+	ld a,1
+	ld (PRINT_LAST_MARK_VALID),a
+.nl_keep:
+	pop af
+	ret
+
+; DELCOL: ลบคอลัมน์ E ของบรรทัดที่ PRINT_ROW ทั้ง 3 แถว (กลาง/บน/ล่าง) แล้วเลื่อนทางขวาเข้ามาแทน
+; คง DE
+DELCOL:
+	push de
+	ld a,(LINLEN)
+	cp e
+	jr c,.dl_ret                   ; คอลัมน์เลยท้ายบรรทัด -- ไม่มีอะไรให้ลบ
+	ld a,(PRINT_ROW)
+	ld d,0
+	call SHIFTROW_L
+	ld a,(PRINT_ROW)
+	cp 2
+	jr c,.dl_low
+	dec a
+	ld d,1
+	call SHIFTROW_L
+.dl_low:
+	call GET_BOTTOM
+	ld b,a
+	ld a,(PRINT_ROW)
+	cp b
+	jr nc,.dl_ret
+	inc a
+	ld d,3
+	call SHIFTROW_L
+.dl_ret:
+	pop de
+	ret
+
+; INS_FIX: โหมด insert ของตัวแก้ไขบรรทัด -- ก่อน CHPUT ของตัวที่พิมพ์ BIOS ($24F2) เลื่อนแถวกลาง
+; ไปทางขวาหนึ่งช่องที่ตำแหน่ง cursor ไปแล้ว:
+;   ตัวอักษรปกติ -> เลื่อนแถวสระบน/ล่างตามไปด้วย ให้ตรงคอลัมน์เดิม
+;   สระ/วรรณยุกต์ (ไม่กินช่อง) -> ปิดช่องว่างที่ BIOS เปิดไว้ในแถวกลางกลับคืน
+; entry: A = class ของตัวอักษร, C = ตัวอักษร -- คง BC/DE/HL
+INS_FIX:
+	push bc
+	push de
+	push hl
+	ld b,a
+	ld a,(INLIN_ACTIVE)
+	or a
+	jr z,.if_ret
+	ld a,(INSFLG)
+	or a
+	jr z,.if_ret
+	ld a,(ESCCNT)                  ; ไบต์ของ ESC sequence (เช่น ESC Y แถว คอลัมน์ ที่ BIOS ส่งตอนกด
+	or a                           ; Enter ขณะ INSFLG ยังเปิดอยู่) ไม่ใช่ตัวที่พิมพ์แทรก -- ข้าม
+	jr nz,.if_ret
+	ld a,c
+	cp $20
+	jr c,.if_ret
+	ld a,(CSRX)
+	ld e,a
+	ld a,b
+	or a
+	jr nz,.if_mark
+	ld a,(PRINT_ROW)
+	cp 2
+	jr c,.if_low
+	dec a
+	ld d,1
+	call SHIFTROW_R
+.if_low:
+	call GET_BOTTOM
+	ld b,a
+	ld a,(PRINT_ROW)
+	cp b
+	jr nc,.if_ret
+	inc a
+	ld d,3
+	call SHIFTROW_R
+	jr .if_ret
+.if_mark:
+	ld a,(PRINT_ROW)
+	ld d,0
+	call SHIFTROW_L
+.if_ret:
+	pop hl
+	pop de
+	pop bc
+	ret
+
+; SR_VALID: แถว A ตั้งแต่คอลัมน์ E ถึงท้ายบรรทัด มีแต่ช่องว่าง หรือเครื่องหมายชนิดที่ถูกต้องเท่านั้น
+; หรือไม่ (D=1: สระบน/วรรณยุกต์/glyph ผสม, D=3: สระล่าง) -> carry=1 ถ้าใช่ -- กันไม่ให้ไปเลื่อน
+; ข้อความของบรรทัดอื่นที่บังเอิญอยู่แถวติดกัน (กรณีไม่ได้เว้น 3 แถว) -- คง DE
+SR_VALID:
+	ld (RB_ROW),a
+	ld a,e
+	ld (RB_COL),a
+.sv_loop:
+	ld a,(LINLEN)
+	ld b,a
+	ld a,(RB_COL)
+	dec a
+	cp b
+	jr nc,.sv_ok
+	ld a,(RB_ROW)
+	call RB_READ
+	cp $20
+	jr z,.sv_next
+	or a
+	jr z,.sv_next
+	ld c,a
+	call CLASSIFY_THAI_MARK
+	ld b,a
+	ld a,d
+	cp 3
+	jr nz,.sv_up
+	ld a,b
+	cp 3
+	jr z,.sv_next
+	or a                           ; carry=0 = ไม่ผ่าน
+	ret
+.sv_up:
+	ld a,b
+	cp 1
+	jr z,.sv_next
+	cp 2
+	jr z,.sv_next
+	ld a,c
+	call DECOMBINE
+	ret nc
+.sv_next:
+	ld hl,RB_COL
+	inc (hl)
+	jr .sv_loop
+.sv_ok:
+	scf
+	ret
+
+; SHIFTROW_L: แถว A คอลัมน์ E..ท้ายบรรทัด เลื่อนซ้าย 1 ช่อง (ช่อง E หายไป ท้ายบรรทัดเติมช่องว่าง)
+; D=0 เลื่อนเลย, D=1/3 เลื่อนเฉพาะเมื่อ SR_VALID ผ่าน -- คง DE
+SHIFTROW_L:
+	push de
+	push af
+	ld a,(LINLEN)
+	cp e
+	jr c,.sl_abort
+	ld a,d
+	or a
+	jr z,.sl_go
+	pop af
+	push af
+	call SR_VALID
+	jr nc,.sl_abort
+.sl_go:
+	pop af
+	ld (RB_ROW),a
+	ld a,e
+	ld (RB_COL),a
+.sl_loop:
+	ld a,(LINLEN)
+	ld b,a
+	ld a,(RB_COL)
+	cp b
+	jr nc,.sl_last
+	inc a
+	ld (RB_COL),a
+	ld a,(RB_ROW)
+	call RB_READ
+	ld hl,RB_COL
+	dec (hl)
+	call RB_WRITE
+	ld hl,RB_COL
+	inc (hl)
+	jr .sl_loop
+.sl_last:
+	ld a,$20
+	call RB_WRITE
+	pop de
+	ret
+.sl_abort:
+	pop af
+	pop de
+	ret
+
+; SHIFTROW_R: แถว A คอลัมน์ E..ท้ายบรรทัด เลื่อนขวา 1 ช่อง (ช่อง E กลายเป็นช่องว่าง ตัวท้ายสุดหลุดไป)
+; D เหมือน SHIFTROW_L -- คง DE
+SHIFTROW_R:
+	push de
+	push af
+	ld a,(LINLEN)
+	cp e
+	jr c,.sr_abort
+	ld a,d
+	or a
+	jr z,.sr_go
+	pop af
+	push af
+	call SR_VALID
+	jr nc,.sr_abort
+.sr_go:
+	pop af
+	ld (RB_ROW),a
+	ld a,(LINLEN)
+	ld (RB_COL),a
+.sr_loop:
+	ld a,(RB_COL)
+	cp e
+	jr z,.sr_first
+	jr c,.sr_first
+	dec a
+	ld (RB_COL),a
+	ld a,(RB_ROW)
+	call RB_READ
+	ld hl,RB_COL
+	inc (hl)
+	call RB_WRITE
+	ld hl,RB_COL
+	dec (hl)
+	jr .sr_loop
+.sr_first:
+	ld a,$20
+	call RB_WRITE
+	pop de
+	ret
+.sr_abort:
+	pop af
+	pop de
+	ret
+
+; RB_WRITE: เขียน A ลงช่อง (RB_ROW, RB_COL) -- คง BC/DE
+RB_WRITE:
+	push bc
+	push de
+	push af
+	ld a,(RB_COL)
+	ld e,a
+	ld a,(RB_ROW)
+	call NAMETAB_ADDR
+	pop af
+	call WRTVRM
+	pop de
+	pop bc
 	ret
