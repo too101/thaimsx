@@ -57,6 +57,21 @@ WORK_ALLOC:
 	ret nz                        ; จองไว้แล้ว
 	dec hl
 	push hl
+	; 9.29: disk ROM ตัวหลัก (master) ใช้ RAM ตายตัว $F1C9-$F37F เป็นพื้นที่ระบบของ DOS เสมอ -- ตอน INIT
+	; ล้างช่วงนี้แล้วลด HIMEM ลง $1BF จากค่าปัจจุบัน (disassembly disk ROM $57A9-$57C3) ถ้าเรา init ก่อน
+	; (HIMEM ยังเป็น $F380) แล้วจองจาก $F380 ลงมา บล็อกจะทับตัวแปร DOS -> Disk BASIC พัง ("Bad file number",
+	; FILES = Syntax error) -- ถ้ามี disk ROM ใน slot อื่นจึงจองใต้ $F1C9 แทน (disk ROM จะกันช่วงบนไว้ให้ DOS เอง)
+	ld hl,(HIMEM)
+	ld de,$F380
+	or a
+	sbc hl,de
+	jr nz,.wa_normal              ; มีคนลด HIMEM ไปแล้ว (disk ROM init ก่อนเรา) -> จองต่อจากนั้นได้เลย
+	call DISK_PRESENT
+	ei                            ; RDSLT ปิด interrupt ไว้
+	jr nc,.wa_normal
+	ld hl,DOS_AREA
+	ld (HIMEM),hl
+.wa_normal:
 	ld hl,(HIMEM)
 	ld de,-WORK_SIZE
 	add hl,de
@@ -82,6 +97,8 @@ WORK_ALLOC:
 ;   FILTAB[i] = FCB i (ต่อกันทีละ $109 ไบต์ เริ่มหลังตาราง), ไบต์แรกของ FCB = 0, NULBUF = FCB0+9
 ; SP ไม่ต้องย้าย: หลัง scan BASIC ตั้ง stack ใหม่จาก STKTOP เอง ($6287 -> $62E5) -- ทำลายทุก register
 FIX_FILES:
+	ld hl,(STKTOP)
+	push hl                       ; STKTOP เดิม (ใช้ย้าย stack ตอนท้าย)
 	ld hl,(MEMSIZ)
 	ld de,(STKTOP)
 	or a
@@ -131,7 +148,122 @@ FIX_FILES:
 	ld bc,9
 	add hl,bc
 	ld (NULBUF),hl
+	ld hl,(STKTOP)
+	dec hl
+	dec hl
+	ld (SAVSTK),hl
+	; ย้าย stack ที่ใช้อยู่ (SP..STKTOP เดิม) ลงไปเท่ากับที่ STKTOP ลด -- ให้ SP <= STKTOP เสมอ แบบเดียวกับที่
+	; disk ROM ทำตอนย้ายหน่วยความจำ ($5F02-$5F19 ใน disk ROM ของ Philips): disk ROM ที่ init ทีหลังคำนวณ
+	; ขนาด stack จาก STKTOP-SP ถ้า SP ยังอยู่เหนือ STKTOP ใหม่ จะคัดลอกผิดแล้วค้าง (บูตไม่ขึ้น prompt)
+	pop hl                        ; STKTOP เดิม
+	ld de,(STKTOP)
+	or a
+	sbc hl,de
+	ld b,h
+	ld c,l                        ; BC = ระยะที่เลื่อน
+	ld hl,0
+	add hl,sp
+	ex de,hl                      ; DE = SP ปัจจุบัน (ต้นทาง)
+	ld l,e
+	ld h,d
+	or a
+	sbc hl,bc                     ; HL = ปลายทาง
+	ld sp,hl                      ; push ต่อจากนี้ลงใต้ปลายทาง ไม่ทับต้นทาง
+	push hl
+	ld hl,(STKTOP)
+	add hl,bc                     ; STKTOP เดิม
+	or a
+	sbc hl,de
+	inc hl
+	ld b,h
+	ld c,l                        ; BC = STKTOP เดิม - SP + 1
+	ex de,hl                      ; HL = ต้นทาง
+	pop de                        ; DE = ปลายทาง
+	ldir                          ; เลื่อนลง (ปลายทาง < ต้นทาง) -- คัดลอกจากล่างขึ้นบนปลอดภัย
+	ret                           ; return address ที่ย้ายแล้ว
+
+; DISK_PRESENT: carry=1 ถ้ามี disk ROM ใน slot อื่น (ไม่นับ slot เรา) -- ลายเซ็น: "AB" ที่ $4000 และ JP ($C3)
+; ที่ $4010/$4013/$4016/$4019/$401C (DSKIO/DSKCHG/GETDPB/CHOICE/DSKFMT ตามข้อกำหนด disk driver ของ MSX-DOS;
+; ตรวจกับ disk ROM ของ Philips/Panasonic/National/Microsol, MSX-DOS 2.3, Sunrise IDE, Beer IDE แล้ว)
+; อ่านผ่าน RDSLT (BIOS $000C) -- ทำลายทุก register, ออกมาแบบ DI
+DISK_PRESENT:
+	ld b,0                        ; B = slot หลัก
+.dp_prim:
+	ld hl,EXPTBL
+	ld a,l
+	add a,b
+	ld l,a
+	ld a,(hl)
+	and $80
+	or b
+	ld c,a                        ; C = slot ID (E000SSPP)
+.dp_sec:
+	push bc
+	ld a,c
+	call CHECK_DISK
+	pop bc
+	ret c
+	bit 7,c
+	jr z,.dp_next                 ; ไม่ได้ขยาย -> มี slot เดียว
+	ld a,c
+	add a,4
+	ld c,a
+	and $0C
+	jr nz,.dp_sec
+.dp_next:
+	inc b
+	ld a,b
+	cp 4
+	jr nz,.dp_prim
+	or a
 	ret
+
+; CHECK_DISK: A = slot ID -> carry=1 ถ้าเป็น disk ROM (และไม่ใช่ slot เราเอง)
+CHECK_DISK:
+	ld e,a
+	push de
+	call GET_MY_SLOT
+	pop de
+	cp e
+	ret z                         ; slot เราเอง (carry=0)
+	ld hl,DISK_SIG
+.cd_loop:
+	ld a,(hl)
+	or a
+	scf
+	ret z                         ; ครบทุกไบต์ -> เป็น disk ROM
+	push hl
+	push de
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a                        ; HL = address ที่จะอ่าน
+	ld a,e
+	call RDSLT
+	pop de
+	pop hl
+	inc hl
+	inc hl
+	cp (hl)
+	inc hl
+	jr z,.cd_loop
+	or a
+	ret
+
+DISK_SIG:                         ; (address, ค่าที่ต้องเป็น) -- จบด้วย 0 (low byte ของ address ไม่เคยเป็น 0 ยกเว้น $4000 ที่ขึ้นก่อน)
+	dw $4001
+	db 'B'
+	dw $4010
+	db $C3
+	dw $4013
+	db $C3
+	dw $4016
+	db $C3
+	dw $4019
+	db $C3
+	dw $401C
+	db $C3
+	db 0
 
 ; IX_HL: HL = IX + HL / IX_DE: DE = IX + DE (offset -> address จริง) -- คง register อื่น
 IX_HL:

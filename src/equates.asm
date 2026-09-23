@@ -130,6 +130,9 @@ FILTAB      equ $F860   ; ตาราง pointer ไป FCB ของแต่�
 NULBUF      equ $F862   ; buffer ของไฟล์ #0
 MEMSIZ      equ $F672   ; ขอบบนของ string space
 STKTOP      equ $F674   ; ขอบบนของ stack BASIC
+FRETOP      equ $F69B   ; ตำแหน่งว่างถัดไปใน string space (BASIC ตั้ง = MEMSIZ ตอน NEW/CLEAR)
+DOS_AREA    equ $F1C9   ; 9.29: ต้นพื้นที่ระบบ DOS ($F1C9-$F37F) ที่ disk ROM ตัวหลักใช้ตายตัว
+SAVSTK      equ $F6B1   ; stack ที่ BASIC จำไว้ (STKTOP-2)
 HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
 WORK_SIZE   equ $FD5C-SLTWRK_OLD
 INPUT_MODE  equ $FD11-SLTWRK_OLD   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)

@@ -1,0 +1,18 @@
+<?xml version="1.0" ?>
+<!DOCTYPE msxconfig SYSTEM 'msxconfig2.dtd'>
+<msxconfig>
+  <info><name>PhilipsDisk</name><manufacturer>test</manufacturer><code/><release_year/><description>blueMSX PHILIPSDISK.rom</description><type>external disk drive</type></info>
+  <devices>
+    <primary slot="any">
+      <secondary slot="any">
+        <WD2793 id="PhilipsDisk FDC">
+          <mem base="0x4000" size="0x4000"/>
+          <broken_fdc_read>false</broken_fdc_read>
+          <connectionstyle>Philips</connectionstyle>
+          <rom><filename>/root/.openMSX/share/systemroms/PHILIPSDISK.rom</filename></rom>
+          <drives>1</drives>
+        </WD2793>
+      </secondary>
+    </primary>
+  </devices>
+</msxconfig>

@@ -1386,6 +1386,26 @@ BIOS ตัดบรรทัดที่เกินความกว้าง
 - assets/font_raw.bin แทนด้วยไฟล์ msxfont.bin ของผู้ใช้ (2048 ไบต์ ใช้ 2040 ไบต์แรก = glyph 0-254,
   glyph 255 เป็นของ cursor BIOS ไม่โหลดทับ) -- ต่างจากเดิมที่ ฺ ($DA) และวรรณยุกต์ $E8-$EC ย้ายไปชิดล่างของช่อง
 
+### 9.29 ใส่ disk ROM แล้วบูตไม่ขึ้น prompt (บั๊กจาก 9.27)
+
+ผู้ใช้รายงานบน blueMSX -- จำลองได้บน openMSX ด้วย disk ROM ของ blueMSX (PHILIPSDISK.rom, WD2793) ทั้ง MSX1/MSX2/2+
+พบ 2 สาเหตุ:
+1. **FIX_FILES ลด STKTOP แต่ไม่ย้าย stack** -- disk ROM ที่ init ทีหลังย้ายหน่วยความจำโดยคัดลอก stack ช่วง
+   SP..STKTOP ($5F02-$5F19 ใน disk ROM) ถ้า SP อยู่เหนือ STKTOP ใหม่ จำนวนไบต์ติดลบ -> ldir ทับทั้ง RAM -> ค้าง
+   แก้: FIX_FILES ย้าย stack ลงเท่ากับที่ STKTOP ลด (วิธีเดียวกับ disk ROM) และตั้ง SAVSTK
+2. **disk ROM ตัวหลักใช้ $F1C9-$F37F ตายตัว** เป็นพื้นที่ระบบของ DOS (ล้างเป็น 0 ตอน INIT แล้วค่อยลด HIMEM
+   $1BF จากค่าปัจจุบัน -- $57A9-$57C3) ถ้า ROM เราอยู่ slot ก่อน disk แล้วจองจาก $F380 บล็อกจะทับตัวแปร DOS ->
+   บูตได้แต่ Disk BASIC พัง (SAVE/LOAD = "Bad file number", FILES = "Syntax error")
+   แก้: ตอนจอง ถ้า HIMEM ยังเป็น $F380 และมี disk ROM ใน slot อื่น (DISK_PRESENT: อ่านผ่าน RDSLT หา "AB" +
+   JP ที่ $4010/$4013/$4016/$4019/$401C ตาม jump table ของ disk driver MSX-DOS -- ตรวจแล้วกับ Philips,
+   Panasonic, National, Microsol, MSX-DOS 2.3, Sunrise IDE, Beer IDE) ให้จองใต้ $F1C9 แทน
+   ราคา: เฉพาะกรณี ROM เราอยู่ slot ก่อน disk -- Bytes free หายเพิ่ม ~440 ไบต์ (ช่วงที่ disk ROM กันไว้แต่ไม่ได้ใช้)
+- ลองทางเลือกจองผ่าน H.STKE (หลัง init ครบ) แล้ว -- ใช้ได้แต่ disk ROM ถือว่า "H.STKE ถูก hook = cartridge ขอ
+  ควบคุมเครื่อง" แล้วข้ามการบูต MSX-DOS / AUTOEXEC.BAS ($59CE) จึงไม่ใช้
+- ยืนยัน: MSX1/MSX2/MSX2+ x (ROM ก่อน disk, disk ก่อน ROM): บูตขึ้น "BASIC ไทย", SAVE/LOAD โปรแกรมภาษาไทย,
+  OPEN/PRINT#/INPUT# ไฟล์ #1, FILES ถูกต้อง, MEMSIZ = FILTAB-2 ทุกกรณี, cursor ไทยกระพริบ + ส่งต่อ H.TIMI ให้
+  disk ROM (THAIOFF คืน hook ของ disk ถูกต้อง) -- ชุดทดสอบเดิมบนเครื่องไม่มี disk ผลไม่เปลี่ยน
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)
