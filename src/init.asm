@@ -138,4 +138,4 @@ BOOT_HOOK:
 	jp H_READ                     ; ต่อไปยัง hook เดิม (ปกติคือ RET)
 
 BOOT_BANNER:
-	db "BASIC ",$DE,$B7,$C2," version 1.0",13,10,0   ; "BASIC ไทย version 1.0" (TIS-620: ไ ท ย)
+	db "BASIC ",$E4,$B7,$C2," version 1.0",13,10,0   ; "BASIC ไทย version 1.0" (TIS-620: ไ=$E4 ท=$B7 ย=$C2)

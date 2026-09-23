@@ -742,7 +742,7 @@ THAI_UNSHIFTED_TABLE:
 THAI_SHIFTED_TABLE:
 	db $F7,$A5,$F1,$F2,$F3,$F4,$D9,$85   ; scan $00-$07
 	db $F5,$F6,$F8,$F9,$2D,$B0,$2C,$AB   ; scan $08-$0F
-	db $DA,$2B,$B2,$CC,$C6,$FF,$C4,$FD   ; scan $10-$17
+	db $2E,$2B,$B2,$CC,$C6,$FF,$C4,$FD   ; scan $10-$17 -- 9.24: Shift+' (ปุ่มเดียวกับ ง) = "." จริงตามแป้นเกษมณี (เดิม $DA)
 	db $A9,$AF,$AE,$E2,$AC,$E7,$B3,$EB   ; scan $18-$1F
 	db $C9,$C8,$3F,$EC,$CF,$AD,$F0,$B1   ; scan $20-$27
 	db $A6,$B8,$EA,$CE,$22,$29,$ED,$28   ; scan $28-$2F
