@@ -46,7 +46,8 @@ NEWCARD_UNUSED equ 0    ; placeholder, unused
 ; address จึง portable โดยธรรมชาติ
 H_CHGE      equ $FDC2
 H_KEYC      equ $FDCC
-H_READ      equ $FE01   ; TODO-verify: ตำแหน่ง H.READ จริง ตอน implement Phase 4 (SYSTEM statement)
+H_READ      equ $FF07   ; 9.22: ยืนยันจาก disassembly -- BASIC เรียกก่อนพิมพ์ "Ok" ($4128 ทั้ง MSX1/2/2+)
+                        ; (ค่าเดิม $FE01 ผิด แต่ไม่เคยถูกใช้)
 ; H_CHPUT: พบจากการ disassemble CHPUT ตัวจริงของ MSX1_bios.rom (0x08BC-0x08DE) ตรง ๆ ระหว่างทำ
 ; PRINTON (ดู printon_algorithm_report.md + SPEC_TH.md section 5 ที่อัปเดตแล้ว) -- CHPUT ตัวจริง
 ; (ที่ jump table CHPUT=$00A2 กระโดดไปหา) ทำ "CALL $FDA4" เป็นก้าวแรกเสมอ ก่อนจะวาดตัวอักษรลง
@@ -203,6 +204,7 @@ H_ERAC         equ $FDAE  ; hook ต้น routine ลบ cursor (MSX1 $0A33, MS
 CURSAV         equ $FBCC  ; ตัวอักษรใต้ cursor ที่ BIOS เก็บไว้เขียนคืนตอนลบ cursor
 CSTYLE         equ $FCAA  ; รูป cursor ของ BIOS: 0 = ทึบ 8 แถว, อื่น = ขีดล่าง 3 แถว (โหมด INS)
 FNKSWI         equ $FBCD  ; สถานะ SHIFT ตอนวาดป้าย function key ล่าสุด (BIOS วาดป้ายใหม่ถ้าต่างจากตอนนี้)
+PREV_READ      equ $FD43  ; 5 ไบต์ ($FD43-$FD47): hook H.READ เดิม ก่อนติดตั้ง BOOT_HOOK (9.22)
 THAI_BS_CODE   equ $10
 THAI_DEL_CODE  equ $11
 KEY_BS_SCAN    equ $3D    ; matrix แถว 7 bit 5

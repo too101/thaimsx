@@ -1293,6 +1293,17 @@ BIOS วาด cursor (MSX1 $09E6 / MSX2,2+ $0A43 โค้ดเหมือน
   ตัวใต้ cursor คืนถูกต้อง (10 REM abc ที่ขยับ cursor ผ่าน b เก็บได้ตรง), THAIOFF ถอด hook ครบ 7 ตัว
 - RAM ใหม่ $FD35-$FD42 (ย่าน SLTWRK เหมือนตัวแปรเดิม)
 
+### 9.22 บูตโดยไม่มีบรรทัด `CALL THAION:?"Thai BASIC version 1.0"` บนจอ
+
+เดิม INIT ดันคำสั่งนี้เข้าคิวคีย์บอร์ดให้ BASIC พิมพ์เอง (echo บนจอเลี่ยงไม่ได้ -- ดู 9.16) เพราะตอน INIT
+ถ้าโหลดฟอนต์เองจะโดน INITXT ของ BASIC โหลดทับทีหลัง -- แก้: INIT ติดตั้ง hook **H.READ ($FF07)** แทน
+(disassembly: BASIC เรียกที่ $4128 ก่อนพิมพ์ "Ok" เหมือนกันทั้ง MSX1/2/2+ ครั้งแรกคือหลัง banner + INITXT
+เสร็จแล้ว) BOOT_HOOK ทำครั้งเดียว: คืน hook เดิม -> THAION_CORE (แยกจาก CMD_THAION) -> ขึ้นบรรทัดถ้าจำเป็น
+(MSX1 "Bytes free" ไม่ขึ้นบรรทัดให้) -> พิมพ์ "Thai BASIC version 1.0" -> ต่อไปยัง hook เดิม
+INIT ถูกเรียกซ้ำได้ -> ไม่ติดตั้งซ้ำถ้า H.READ ชี้มาที่เราแล้ว, equate H_READ เดิม ($FE01) ผิด แก้เป็น $FF07
+ยืนยัน (`tests_919/t_boot.tcl`): จอบูต = banner ของ BASIC + "Thai BASIC version 1.0" + "Ok" ทั้ง MSX1/MSX2/MSX2+,
+ฟอนต์ไทยอยู่ใน VRAM, hook ติดตั้งครบ, คิวคีย์บอร์ดว่าง, พิมพ์ไทย+PRINTON เก็บได้ครบ -- เทสทั้งหมดผ่านเหมือนเดิม
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)

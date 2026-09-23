@@ -113,6 +113,12 @@ CMD_PLOCKOFF:
 CMD_THAION:
 	pop hl
 	push hl
+	call THAION_CORE
+	pop hl
+	jp STMT_DONE
+
+; THAION_CORE (9.22): งานของ THAION ทั้งหมด แยกออกมาให้ BOOT_HOOK เรียกตอนบูตได้ด้วย -- ทำลายทุก register
+THAION_CORE:
 	ld a,TRUE
 	ld (THAI_MODE),a
 	; DI/EI รอบ LDIRVM: เก็บไว้เป็น defensive practice (กัน interrupt แทรกกลางการ copy
@@ -148,8 +154,7 @@ CMD_THAION:
 	; PRINTHOOK เองเช็ค PRINT_MODE ทุกครั้งอยู่แล้ว
 	call PRINTHOOK_INSTALL
 .thaion_done:
-	pop hl
-	jp STMT_DONE
+	ret
 
 CMD_THAIOFF:
 	pop hl
