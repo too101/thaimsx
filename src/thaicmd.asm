@@ -130,12 +130,17 @@ THAION_CORE:
 	; ไม่ได้เกิดจากปัญหานี้จริง ๆ -- พิสูจน์แล้วว่าเป็น test-script อ่าน VRAM เร็วเกินไป (อ่านก่อน
 	; LDIRVM ทำงานเสร็จ) ไม่ใช่ interrupt แย่ง VDP latch (ใส่ DI/EI แล้ว diff เดิมยังอยู่เท่าเดิม
 	; จนกว่าจะแก้ timing ของ test script เอง ถึงหาย) แต่ DI/EI ยังถูกต้องในหลักการเลยคงไว้
+	ld a,(SCRMOD)                 ; 9.33: โหมดกราฟิก -- pattern table คือภาพ ห้ามเขียนฟอนต์ทับ
+	cp 2
+	jr nc,.thaion_nofont
 	di
 	ld hl,FONT_THAI
 	ld de,(CGPNT)
 	ld bc,FONT_THAI_END-FONT_THAI
 	call LDIRVM
 	ei
+.thaion_nofont:
+	call SET_CGPNT                ; 9.33: ให้ BIOS ใช้ฟอนต์ไทยของเราเอง (SCREEN ใหม่/กราฟิก)
 	; เปิดใช้งานอีกครั้งด้วยกลไกใหม่ (RST 30H / CALLF แทน trampoline เดิม -- ดู comment เต็มที่
 	; KEYC_INSTALL ใน src/keyboard.asm) หลังปิดไปชั่วคราวตอนบั๊กข้อ 8 ยังไม่จบ
 	; *** 9.19: กันติดตั้งซ้ำ -- ROM นี้สั่ง CALL THAION เองตอนบูตอยู่แล้ว ถ้าผู้ใช้สั่ง THAION ซ้ำ
@@ -175,8 +180,45 @@ CMD_THAIOFF:
 	; *** ไม่เรียก INITXT อีกต่อไป (คำขอผู้ใช้: ไม่ต้องเคลียร์หน้าจอ) -- ดู comment เต็มด้านบน ***
 	call KEYC_UNINSTALL
 	call PRINTHOOK_UNINSTALL
+	call RESTORE_CGPNT            ; 9.33
 	pop hl
 	jp STMT_DONE
+
+; SET_CGPNT (9.33): CGPNT = ฟอนต์ไทยใน ROM นี้ (ต้นฉบับ $4076 ทำแบบเดียวกัน) -- สำรองค่าเดิมไว้ก่อน (ถ้ายังไม่ใช่
+; ของเรา) เพื่อคืนตอน THAIOFF -- ทำลาย AF, HL (คง BC)
+SET_CGPNT:
+	ld hl,(FONTADR)
+	ld a,l
+	cp FONT_THAI and $FF
+	jr nz,.sc_save
+	ld a,h
+	cp FONT_THAI/256
+	jr z,.sc_set                  ; ชี้ฟอนต์เราอยู่แล้ว -- ไม่สำรองทับ
+.sc_save:
+	ld (ix+SAVED_CGPNT+1),l
+	ld (ix+SAVED_CGPNT+2),h
+	ld a,(FONTSLT)
+	ld (ix+SAVED_CGPNT),a
+.sc_set:
+	push bc
+	call GET_MY_SLOT
+	pop bc
+	ld (FONTSLT),a
+	ld hl,FONT_THAI
+	ld (FONTADR),hl
+	ret
+
+; RESTORE_CGPNT (9.33): คืน CGPNT เดิม -- ทำลาย AF, HL
+RESTORE_CGPNT:
+	ld a,(ix+SAVED_CGPNT+2)
+	or a
+	ret z                         ; ยังไม่เคยสำรอง
+	ld l,(ix+SAVED_CGPNT+1)
+	ld h,a
+	ld (FONTADR),hl
+	ld a,(ix+SAVED_CGPNT)
+	ld (FONTSLT),a
+	ret
 
 ; --- 9.30 (A4): CALL SYSTEM -- แสดงข้อความเวอร์ชันของระบบ (ต้นฉบับ $42EA ตั้ง H.READ ให้พิมพ์ข้อความเวอร์ชัน
 ; ตอน "Ok" ถัดไป -- ของเราพิมพ์ทันที ผลที่เห็นเหมือนกัน)

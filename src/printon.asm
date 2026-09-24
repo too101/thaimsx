@@ -121,6 +121,11 @@ PRINTHOOK_INSTALL:
 	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
 	ld bc,TIMI_HOOK
 	call HOOK_INSTALL
+	ld hl,H_GRPO                  ; 9.33: ภาษาไทย 3 ระดับบนจอกราฟิก (ส่งต่อ hook เดิมเสมอ)
+	ld de,PREV_GRPO
+	call IX_DE
+	ld bc,GRPO_HOOK
+	call HOOK_INSTALL
 	ei
 	ret
 
@@ -165,6 +170,11 @@ PRINTHOOK_UNINSTALL:
 	ld hl,PREV_TIMI
 	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
 	ld de,H_TIMI
+	ld bc,5
+	ldir
+	ld hl,PREV_GRPO               ; 9.33
+	call IX_HL
+	ld de,H_GRPO
 	ld bc,5
 	ldir
 	xor a
@@ -2178,3 +2188,144 @@ PRINT_RESYNC:
 	ld a,(CSRY)
 	ld (ix+PRINT_ROW),a
 	jp COMBINE_FIX
+
+; ==========================================================================
+; ---- 9.33: ภาษาไทยบนจอกราฟิก (SCREEN 2 ขึ้นไป, PRINT #n ไปที่ OPEN "GRP:") ----
+; ฟอนต์: CGPNT ชี้ฟอนต์ไทยใน ROM (SET_CGPNT) -- GRPPRT ของ BIOS วาดตัวไทยได้เอง
+; 3 ระดับ: hook H.FEC6 (BASIC เรียกก่อนส่งตัวอักษรไปอุปกรณ์ -- A ที่คืนไปคือตัวที่จะส่งจริง) ถ้าอุปกรณ์เป็น GRP:
+;   - ตัวปกติ: ปล่อยให้ BASIC วาดเอง (จำว่ายังไม่มีสระบน/วรรณยุกต์บนตัวนี้)
+;   - สระบน/วรรณยุกต์: วาดเองที่ (GRPACX-8, GRPACY-8) ด้วย GRPPRT (BIOS) แล้วคืน GRPACX/Y เดิม
+;     สระบน+วรรณยุกต์ (หรือ วรรณยุกต์+ํ) -> ลบช่องนั้น (วาด glyph 255 ด้วยสีพื้น) แล้ววาด glyph ผสม
+;   - สระล่าง: วาดเองที่ (GRPACX-8, GRPACY+8)
+;   แล้วคืน A = 0 (รหัสควบคุมที่ GRPPRT ไม่วาดและไม่เลื่อนตำแหน่ง) ให้ BASIC -- ไม่ต้องแก้ stack แบบต้นฉบับ
+; ส่งต่อ hook เดิมเสมอ (disk BASIC ใช้ hook นี้กับไฟล์บนดิสก์) -- ดู GRPO_HOOK ใน workram.asm
+
+; GRPO_BODY: A = รหัสงานของอุปกรณ์ (6 = ส่งตัวอักษร), C = ตัวอักษร, HL = FCB -> C = ตัวที่ให้ BASIC ส่งจริง
+; (ต้นฉบับ $4543 อ่านตัวจาก C เหมือนกัน) -- คง AF/DE/HL/B
+GRPO_BODY:
+	push af
+	push hl
+	push de
+	push bc
+	cp 6
+	jr nz,.go_out
+	ld a,(ix+THAI_MODE)
+	or a
+	jr z,.go_out
+	ld a,(SCRMOD)
+	cp 2
+	jr c,.go_out
+	ld de,4
+	add hl,de
+	ld a,(hl)
+	cp DEV_GRP
+	jr nz,.go_out
+	ld a,c
+	call CLASSIFY_THAI_MARK       ; 0 ปกติ / 1 สระบน / 2 วรรณยุกต์ / 3 สระล่าง
+	or a
+	jr nz,.go_mark
+	ld a,c
+	cp $20
+	jr c,.go_out                  ; รหัสควบคุม -- ไม่เกี่ยว
+	xor a                         ; ตัวปกติ: เริ่มช่องใหม่
+	ld (ix+GR_LASTV),a
+	ld (ix+GR_LASTT),a
+.go_out:
+	ld a,c
+	pop bc
+	ld c,a                        ; C = ตัวที่จะส่ง (อาจเป็น 0 แทนเครื่องหมายที่วาดเองแล้ว)
+	pop de
+	pop hl
+	pop af
+	ret
+.go_mark:
+	ld (ix+GR_CH),c
+	ld b,a                        ; B = ชนิด
+	ld hl,(GRPACX)
+	ld de,-8
+	add hl,de
+	jr c,.go_xok
+	ld hl,0                       ; ไม่มีตัวก่อนหน้าในแถว -- วางคอลัมน์ 0
+.go_xok:
+	push hl                       ; x
+	ld hl,(GRPACY)
+	ld de,8
+	ld a,b
+	cp 3
+	jr z,.go_low
+	or a
+	sbc hl,de                     ; แถวบน
+	jr nc,.go_yok
+	pop hl
+	jr .go_drop                   ; บนสุดจอ -- ไม่มีที่วาง
+.go_low:
+	add hl,de                     ; แถวล่าง
+.go_yok:
+	ex de,hl                      ; DE = y
+	pop hl                        ; HL = x
+	ld a,b
+	cp 3
+	jr z,.go_plain
+	cp 2
+	jr z,.go_tone
+	; สระบน: ํ ตามหลังวรรณยุกต์ (ำ ที่แยกเป็น ํ+า) -> ผสม
+	ld a,(ix+GR_CH)
+	ld (ix+GR_LASTV),a
+	cp $ED
+	jr nz,.go_plain
+	ld a,(ix+GR_LASTT)
+	or a
+	jr z,.go_plain
+	ld c,a                        ; C = วรรณยุกต์
+	ld a,$ED
+	jr .go_combo
+.go_tone:
+	ld a,(ix+GR_CH)
+	ld (ix+GR_LASTT),a
+	ld c,a                        ; C = วรรณยุกต์
+	ld a,(ix+GR_LASTV)
+	or a
+	jr z,.go_plain
+.go_combo:
+	push hl
+	call COMBINE_LOOKUP           ; A = สระบน, C = วรรณยุกต์ -> A = glyph ผสม (carry = พบ) -- ทำลาย B/HL
+	pop hl
+	jr nc,.go_plain
+	ld (ix+GR_CH),a
+	ld a,(FORCLR)                 ; ลบช่องก่อน (ตัวที่วาดไว้แล้วอยู่ตำแหน่งต่างจากใน glyph ผสม)
+	push af
+	ld a,(BAKCLR)
+	ld (FORCLR),a
+	ld a,$FF
+	call GR_DRAW
+	pop af
+	ld (FORCLR),a
+.go_plain:
+	ld a,(ix+GR_CH)
+	call GR_DRAW
+.go_drop:
+	ld c,0                        ; ให้ BASIC ส่งรหัส 0 แทน (ไม่วาด ไม่เลื่อน)
+	jr .go_out
+
+; GR_DRAW: วาดตัว A ที่ (HL = x, DE = y) ด้วย GRPPRT แล้วคืน GRPACX/GRPACY เดิม -- คง BC/DE/HL
+GR_DRAW:
+	push hl
+	push de
+	push bc
+	ld bc,(GRPACX)
+	push bc
+	ld bc,(GRPACY)
+	push bc
+	ld (GRPACX),hl
+	ld (GRPACY),de
+	push ix
+	call GRPPRT                   ; MSX2 SCREEN 5+ เรียก sub-ROM (ทำลาย IX/IY) -- เก็บ IX ไว้
+	pop ix
+	pop bc
+	ld (GRPACY),bc
+	pop bc
+	ld (GRPACX),bc
+	pop bc
+	pop de
+	pop hl
+	ret

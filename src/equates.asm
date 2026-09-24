@@ -137,7 +137,7 @@ CAPST       equ $FCAB   ; 9.32: สถานะ CAPS LOCK ของ BIOS (ไม
 NEWKEY_R2   equ $FBE7   ; 9.32: matrix แถว 2 (bit5 = ปุ่ม scan $15, 0 = กดอยู่)
 CURLIN      equ $F41C   ; 9.30: เลขบรรทัดที่กำลังทำงาน ($FFFF = direct mode)
 HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
-WORK_SIZE   equ $FD5E-SLTWRK_OLD
+WORK_SIZE   equ $FD6C-SLTWRK_OLD
 INPUT_MODE  equ $FD11-SLTWRK_OLD   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)
 THAI_MODE   equ $FD12-SLTWRK_OLD   ; THAION/THAIOFF สวิตช์ใหญ่ -- ย้ายจาก $FCAD (บั๊กข้อ 12)
 PRINT_MODE  equ $FD09-SLTWRK_OLD   ; PRINTON/PRINTOFF flag (แสดงผล 3 ระดับ) -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
@@ -237,6 +237,11 @@ IC_CARRY       equ $FD51-SLTWRK_OLD  ; 3 ไบต์ ($FD51-$FD53): ตัว�
 LT_TMP         equ $FD54-SLTWRK_OLD  ; 1 ไบต์ scratch ของ LT_SET
 BLINK_CNT      equ $FD55-SLTWRK_OLD  ; 9.26: ตัวนับ frame ของการกระพริบ cursor ภาษาไทย
 BLINK_OFF      equ $FD56-SLTWRK_OLD  ; 9.26: 1 = ตอนนี้ glyph 255 เป็นตัวปกติ (cursor "ดับ")
+GR_LASTV       equ $FD5E-SLTWRK_OLD  ; 9.33: สระบนตัวล่าสุดบนพยัญชนะปัจจุบัน (โหมดกราฟิก) 0 = ไม่มี
+GR_LASTT       equ $FD5F-SLTWRK_OLD  ; 9.33: วรรณยุกต์ตัวล่าสุด (โหมดกราฟิก)
+GR_CH          equ $FD60-SLTWRK_OLD  ; 9.33: ตัวที่กำลังวาด
+SAVED_CGPNT    equ $FD61-SLTWRK_OLD  ; 9.33: 3 ไบต์ ($FD61-$FD63) CGPNT เดิม (slot + address ฟอนต์) ก่อน THAION
+PREV_GRPO      equ $FD64-SLTWRK_OLD  ; 9.33: 5 ไบต์ ($FD64-$FD68) hook H.FEC6 เดิม -- ต้องส่งต่อเสมอ (disk BASIC)
 SF_KIND        equ $FD5D-SLTWRK_OLD  ; 9.30: ชนิดของ ANSTR/TNSTR/MLSTR ที่กำลังทำ
 BOOT_SKIP      equ $FD5C-SLTWRK_OLD  ; 9.30: CODE ค้างตอน INIT -> ไม่เปิดระบบไทยตอนบูต
 PREV_TIMI      equ $FD57-SLTWRK_OLD  ; 9.26: 5 ไบต์ ($FD57-$FD5B) hook H.TIMI เดิม -- ต้องเรียกต่อเสมอ (disk ROM ใช้)
@@ -337,3 +342,15 @@ BCALL MACRO addr
 	call CALBAS
 	pop ix
 	ENDM
+
+; ---- 9.33: ภาษาไทยในโหมดกราฟิก ----
+FONTSLT     equ $F91F   ; CGPNT: slot ของฟอนต์ที่ BIOS ใช้ (INITXT/INIT32/GRPPRT อ่านผ่าน RDSLT)
+FONTADR     equ $F920   ; CGPNT+1: address ของฟอนต์
+H_GRPO      equ $FEC6   ; hook ใน BASIC ตอนส่งตัวอักษรออกไฟล์/อุปกรณ์ ($6F8F: A = ตัว, HL = FCB) -- A ที่คืนไป
+                        ; ถูกใช้ต่อ (ต้นฉบับ MSXTHA102 ใช้ hook นี้กับ GRP: เหมือนกัน)
+DEV_GRP     equ $FC     ; รหัสอุปกรณ์ GRP: ที่ FCB+4 (ตารางอุปกรณ์ BASIC $6F76: CAS FF, LPT FE, CRT FD, GRP FC)
+GRPPRT      equ $008D   ; BIOS: วาดตัวอักษรบนจอกราฟิกที่ (GRPACX, GRPACY) แล้วเลื่อน GRPACX
+GRPACX      equ $FCB7
+GRPACY      equ $FCB9
+FORCLR      equ $F3E9
+BAKCLR      equ $F3EA

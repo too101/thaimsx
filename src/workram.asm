@@ -371,3 +371,20 @@ TIMI_HOOK:
 	pop af                        ; flag เดิมกลับมาด้วย
 	ex (sp),hl                    ; HL = ค่าเดิม, (sp) = ปลายทาง
 	ret
+
+; GRPO_HOOK (9.33): H.FEC6 -- ทำงานแล้วส่งต่อ hook เดิม (บล็อก+PREV_GRPO) ด้วย A ที่อาจเปลี่ยนแล้ว (register
+; อื่นคืนตามเดิมทุกตัว) แบบเดียวกับ TIMI_HOOK
+GRPO_HOOK:
+	push ix
+	call GET_IX
+	call GRPO_BODY
+	ex (sp),ix
+	ex (sp),hl
+	push af
+	push de
+	ld de,0+PREV_GRPO
+	add hl,de
+	pop de
+	pop af
+	ex (sp),hl
+	ret

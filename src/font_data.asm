@@ -6,3 +6,4 @@
 FONT_THAI:
 	incbin "assets/font_raw.bin"
 FONT_THAI_END:
+	db $FF,$FF,$FF,$FF,$FF,$FF,$FF,$FF   ; 9.33: glyph 255 (ทึบ) -- BIOS อ่านฟอนต์ 2048 ไบต์จาก CGPNT (SCREEN/GRPPRT)
