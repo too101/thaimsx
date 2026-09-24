@@ -1406,6 +1406,28 @@ BIOS ตัดบรรทัดที่เกินความกว้าง
   OPEN/PRINT#/INPUT# ไฟล์ #1, FILES ถูกต้อง, MEMSIZ = FILTAB-2 ทุกกรณี, cursor ไทยกระพริบ + ส่งต่อ H.TIMI ให้
   disk ROM (THAIOFF คืน hook ของ disk ถูกต้อง) -- ชุดทดสอบเดิมบนเครื่องไม่มี disk ผลไม่เปลี่ยน
 
+### 9.30 ฟีเจอร์ที่ขาดเทียบกับต้นฉบับ (กลุ่ม A + B)
+
+ไล่จาก disassembly ของ MSXTHA102 v1.02 (hook table ที่ $40A6: CHPU/CHGE/PINL/QINL/INLI/KEYC/READ/LPTO/$FEC6)
+- **A1 GRAPH+A..Z = คำสั่ง BASIC** (+SHIFT = ชุดที่สอง) ข้อความจากตารางต้นฉบับ $4F32/$4FF2 (`src/kwtables_data.asm`)
+  ทำงานเมื่อ THAION ไม่ว่าพิมพ์ไทยหรืออังกฤษ, CTRL+GRAPH ปล่อยผ่าน, GRAPH+ปุ่มอื่นยังเป็นอักษรกราฟิกตามปกติ
+- **A2 SELECT สลับ PRINTON/PRINTOFF + ล้างจอ** (ต้นฉบับ $512E/$515C) -- INLIN ส่งรหัส $18 มาที่ CHPUT,
+  PRINTHOOK จับแล้วเรียก SELECT_TOGGLE; PLOCKON ล็อกไว้ได้; เปิด PRINTON แล้วเริ่มแถว 2 (มีแถวสระบน),
+  ตั้ง FSTPOS ใหม่ และใน direct mode ตั้ง INLIN_ACTIVE ตามโหมดใหม่ ให้บรรทัดที่กำลังพิมพ์ประกอบสระกลับเข้า BUF ได้
+- **A3 ไม่ทำ**: ต้นฉบับกลับเป็นอังกฤษเองเมื่อกด Enter ใน direct mode ($50F6-$510C) แต่ผู้ใช้เคยรายงานอาการนี้
+  ว่าเป็นบั๊ก (บั๊กจริงข้อ 12 รอบสอง) จึงคงพฤติกรรมปัจจุบัน (SET_INPUT_MODE แยกไว้แล้ว เปิดได้ง่ายถ้าต้องการ)
+- **A4 CALL SYSTEM** พิมพ์ข้อความเวอร์ชัน (PRINT_BANNER ใช้ร่วมกับตอนบูต)
+- **A5 กด CODE ค้างตอนเปิดเครื่อง** = ไม่เปิดระบบไทย (เช็คทั้งตอน INIT -> BOOT_SKIP และตอน "Ok" แรก)
+  หมายเหตุ: MSX2+ ที่ใช้ทดสอบ (BIOS ญี่ปุ่น) เองมีพฤติกรรมพิเศษเมื่อกด KANA ค้างตอนบูต -- เป็นของ BIOS ไม่ใช่ ROM เรา
+- **B CALL ANSTR/TNSTR/MLSTR(<สตริง>,<ตัวแปร$>)** (ต้นฉบับ $43E4-$44FB -- wiki อธิบายคลาดเคลื่อน):
+  ANSTR = เลขไทย->อารบิก, TNSTR = อารบิก->เลขไทย, MLSTR = ตัดสระบน/ล่าง/วรรณยุกต์/glyph ผสม (ตาราง $55A0)
+  ใช้ routine ภายใน BASIC ผ่าน CALBAS แบบต้นฉบับ (FRMEVL $4C64, GETYPR $5597, FRESTR $67D3, STRCPY $6611,
+  CHRGTR $4666, PTRGET $5EA4, SNERR $4055, TMERR $406D) -- ตรวจแล้วว่า code เหมือนกันทุกไบต์บน MSX1/2/2+
+  ผลพักที่ BUF+3 ก่อนจองที่ (การจองอาจเก็บขยะ string) -- ทดสอบวน 500 รอบด้วย CLEAR 60 ผลถูกต้อง
+- WORK_SIZE เพิ่มเป็น 85 ไบต์ (BOOT_SKIP, SF_KIND)
+- เทส: tests_919/t_a13 (GRAPH คำสั่ง + Enter), t_select, t_a45 (SYSTEM + CODE ค้าง), t_strfn -- ผ่าน 4 เครื่อง;
+  ชุดเดิมผลไม่เปลี่ยน; disk ROM 2 ลำดับ slot ผ่าน
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)

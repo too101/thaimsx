@@ -304,6 +304,13 @@ PRINTHOOK_BODY:
 	ld a,(ix+PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
+	pop af
+	push af
+	cp SELECT_CODE             ; 9.30 (A2): ปุ่ม SELECT (INLIN ส่ง $18 มาที่ CHPUT) สลับ PRINTON/PRINTOFF
+	jr nz,.not_select
+	call SELECT_TOGGLE
+	jp .done
+.not_select:
 	ld a,(ix+PRINT_MODE)
 	or a
 	jp z,.done                 ; PRINTON ยังไม่เปิด -- ปล่อยผ่าน ไม่ทำอะไรเลย (jp เพราะ .done
@@ -1579,6 +1586,49 @@ SHIFTROW_R:
 .sr_abort:
 	pop af
 	pop de
+	ret
+
+; SELECT_TOGGLE (9.30 A2): สลับ PRINTON/PRINTOFF แล้วล้างจอ -- ตามต้นฉบับ $512E-$5150 (ล้างจอเพราะข้อความ
+; ที่วาดไว้แบบเก่าอ่านไม่ได้ในอีกแบบ) -- ถ้า PLOCKON อยู่ไม่ทำอะไร -- ล้างจอด้วย CHPUT($0C) ซ้อน ซึ่งผ่าน
+; PRINTHOOK อีกรอบตามโหมดใหม่ -- ทำลาย AF, HL
+SELECT_TOGGLE:
+	ld a,(ix+PLOCK_MODE)
+	or a
+	ret nz
+	ld a,(ix+PRINT_MODE)
+	cpl
+	ld (ix+PRINT_MODE),a
+	or a
+	jr nz,.st_on
+	ld a,TRUE
+	ld (CURSOR_BLINK_FLAG),a      ; เหมือน CMD_PRINTOFF
+.st_on:
+	xor a
+	ld (ix+PRINT_REDIRECT),a
+	ld (ix+WRAP_PENDING),a
+	ld (ix+GHOST_PENDING),a
+	ld (ix+PRINT_COMBINE_PENDING),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
+	ld a,$0C
+	call CHPUT_IX
+	ld a,(ix+PRINT_MODE)
+	or a
+	jr z,.st_fst
+	ld a,2                        ; PRINTON: เริ่มแถว 2 ให้มีแถวสระบนเหนือข้อความ (ต้นฉบับ $552F จัดแถวเหมือนกัน)
+	ld (CSRY),a
+	ld (ix+PRINT_ROW),a
+.st_fst:
+	ld a,(CSRY)                   ; บรรทัดที่กำลังรับอยู่เริ่มใหม่ที่ต้นแถวปัจจุบัน (FSTPOS เดิมชี้แถวก่อนล้างจอ)
+	ld (FSTPOS),a
+	ld a,1
+	ld (FSTPOS+1),a
+	ld hl,(CURLIN)                ; direct mode = SELECT มาจาก INLIN ของบรรทัดคำสั่ง -> บรรทัดนี้ต้อง
+	inc hl                        ; ประกอบสระบน/ล่างกลับเข้า BUF ตามโหมดใหม่ (INLIN_HOOK ตั้งไว้ตามโหมดเดิม)
+	ld a,h
+	or l
+	ret nz
+	ld a,(ix+PRINT_MODE)
+	ld (ix+INLIN_ACTIVE),a
 	ret
 
 ; RB_WRITE: เขียน A ลงช่อง (RB_ROW, RB_COL) -- คง BC/DE

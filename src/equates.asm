@@ -133,8 +133,9 @@ STKTOP      equ $F674   ; ขอบบนของ stack BASIC
 FRETOP      equ $F69B   ; ตำแหน่งว่างถัดไปใน string space (BASIC ตั้ง = MEMSIZ ตอน NEW/CLEAR)
 DOS_AREA    equ $F1C9   ; 9.29: ต้นพื้นที่ระบบ DOS ($F1C9-$F37F) ที่ disk ROM ตัวหลักใช้ตายตัว
 SAVSTK      equ $F6B1   ; stack ที่ BASIC จำไว้ (STKTOP-2)
+CURLIN      equ $F41C   ; 9.30: เลขบรรทัดที่กำลังทำงาน ($FFFF = direct mode)
 HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
-WORK_SIZE   equ $FD5C-SLTWRK_OLD
+WORK_SIZE   equ $FD5E-SLTWRK_OLD
 INPUT_MODE  equ $FD11-SLTWRK_OLD   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)
 THAI_MODE   equ $FD12-SLTWRK_OLD   ; THAION/THAIOFF สวิตช์ใหญ่ -- ย้ายจาก $FCAD (บั๊กข้อ 12)
 PRINT_MODE  equ $FD09-SLTWRK_OLD   ; PRINTON/PRINTOFF flag (แสดงผล 3 ระดับ) -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
@@ -234,6 +235,8 @@ IC_CARRY       equ $FD51-SLTWRK_OLD  ; 3 ไบต์ ($FD51-$FD53): ตัว�
 LT_TMP         equ $FD54-SLTWRK_OLD  ; 1 ไบต์ scratch ของ LT_SET
 BLINK_CNT      equ $FD55-SLTWRK_OLD  ; 9.26: ตัวนับ frame ของการกระพริบ cursor ภาษาไทย
 BLINK_OFF      equ $FD56-SLTWRK_OLD  ; 9.26: 1 = ตอนนี้ glyph 255 เป็นตัวปกติ (cursor "ดับ")
+SF_KIND        equ $FD5D-SLTWRK_OLD  ; 9.30: ชนิดของ ANSTR/TNSTR/MLSTR ที่กำลังทำ
+BOOT_SKIP      equ $FD5C-SLTWRK_OLD  ; 9.30: CODE ค้างตอน INIT -> ไม่เปิดระบบไทยตอนบูต
 PREV_TIMI      equ $FD57-SLTWRK_OLD  ; 9.26: 5 ไบต์ ($FD57-$FD5B) hook H.TIMI เดิม -- ต้องเรียกต่อเสมอ (disk ROM ใช้)
 THAI_INS       equ $FD50-SLTWRK_OLD  ; โหมด INS ของเราเอง ขณะ PRINTON (ดู CHGE_HOOK) -- BIOS เห็น INSFLG=0 ตลอด
 ; LINTTB marker: ค่าไม่เป็น 0 (BIOS ถือว่า "ไม่ต่อแถว") แต่เราใช้บอกว่าแถวข้อความนี้ต่อไป/ต่อมาจากแถว
@@ -241,6 +244,7 @@ THAI_INS       equ $FD50-SLTWRK_OLD  ; โหมด INS ของเราเอ
 LT_MARK        equ $50
 LT_DOWN        equ 1      ; แถวนี้ต่อไปที่ แถว+3
 LT_UP          equ 2      ; แถวนี้ต่อมาจาก แถว-3
+SELECT_CODE    equ $18    ; 9.30: รหัสที่ปุ่ม SELECT ให้ (INLIN ส่งต่อไป CHPUT)
 THAI_BS_CODE   equ $10
 THAI_DEL_CODE  equ $11
 KEY_BS_SCAN    equ $3D    ; matrix แถว 7 bit 5
@@ -311,3 +315,23 @@ MY_SLOT_ID     equ $FD10-SLTWRK_OLD  ; 1 ไบต์ (ย้ายจาก $FD
 ; ---- ค่าคงที่อื่น ----
 TRUE        equ $FF
 FALSE       equ $00
+
+; ---- 9.30: routine ภายในของ BASIC ROM ที่ ANSTR/TNSTR/MLSTR ใช้ (เรียกผ่าน CALBAS แบบเดียวกับต้นฉบับ) --
+; ตรวจแล้วว่า code ที่ address เหล่านี้เหมือนกันทุกไบต์บน MSX1 / MSX2 / MSX2+ BASIC ROM
+CALBAS      equ $0159   ; BIOS: เรียก routine ใน BASIC ROM (IX = address)
+BAS_CHRGTR  equ $4666   ; อ่านตัวถัดไปในข้อความ (ข้ามช่องว่าง)
+BAS_FRMEVL  equ $4C64   ; ประเมินนิพจน์ -> DAC
+BAS_GETYPR  equ $5597   ; ชนิดของผลใน DAC (Z = สตริง)
+BAS_PTRGET  equ $5EA4   ; หา/สร้างตัวแปร -> DE = address ค่าของตัวแปร
+BAS_STRCPY  equ $6611   ; คัดลอกสตริง (HL -> descriptor) เข้า string space -> DE = descriptor ชั่วคราว
+BAS_FRESTR  equ $67D3   ; ปล่อยสตริงชั่วคราวใน DAC -> HL = descriptor
+BAS_SNERR   equ $4055   ; "Syntax error"
+BAS_TMERR   equ $406D   ; "Type mismatch"
+VALTYP      equ $F663   ; ชนิดของค่า (3 = สตริง)
+
+BCALL MACRO addr
+	push ix
+	ld ix,addr
+	call CALBAS
+	pop ix
+	ENDM

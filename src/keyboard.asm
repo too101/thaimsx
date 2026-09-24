@@ -341,6 +341,7 @@
 ; ==========================================================================
 
 KEYC_TOGGLE_CODE equ $34   ; scan/key code ของปุ่มสลับไทย/อังกฤษ (ยืนยันจาก ROM เดิม, ดูหัวข้อ 2)
+KEY_A_SCAN     equ $16   ; 9.30: A..Z = scan $16..$2F
 
 ; *** บั๊กจริงข้อ 10 (แก้แล้ว) -- ค่า A ตอนคืน carry=1 (SCF) ทำให้ BIOS ดันตัวอักษรซ้ำ ***
 ; หลังเปลี่ยนมาใช้ RST 30H (CALLF) แทน trampoline เดิม พบว่า BIOS's caller จริง (0x1025 CALL
@@ -423,7 +424,7 @@ KEYC_BODY:
 	push hl
 	ld a,c
 	cp KEYC_TOGGLE_CODE
-	jr z,.toggle
+	jp z,.toggle
 	; --- 9.20: BS/DEL ระหว่างรับบรรทัดขณะ PRINTON -> ดันโค้ดส่วนตัวแทน ให้ PRINTHOOK ลบพร้อมสระบน/ล่าง ---
 	; (INLIN_ACTIVE ตั้งเฉพาะตอน PRINTON เปิดและ BIOS กำลังรับบรรทัด -- นอกนั้น BS/DEL ปกติทุกประการ)
 	cp KEY_BS_SCAN
@@ -451,9 +452,49 @@ KEYC_BODY:
 	ld a,(ix+THAI_MODE)
 	or a
 	jr z,.passthrough          ; cartridge ยังไม่ได้ THAION -- ปล่อยผ่านตามปกติ
+	; ---- 9.30 (A1): GRAPH+A..Z พิมพ์คำสั่ง BASIC ทั้งคำ (+SHIFT = ชุดที่สอง) -- ตามต้นฉบับ $4D17-$4D21 ->
+	; $4F0B: ทำงานทุกครั้งที่ THAION อยู่ ไม่ว่าจะพิมพ์ไทยหรืออังกฤษ (CTRL+GRAPH ปล่อยผ่าน)
+	ld a,(SHIFT_STATE)
+	bit 2,a
+	jr nz,.no_kw                ; GRAPH ไม่ได้กด
+	bit 1,a
+	jr z,.no_kw                 ; CTRL กดด้วย -- ปล่อยผ่าน
+	ld a,c
+	sub KEY_A_SCAN
+	jr c,.no_kw
+	cp 26
+	jr nc,.no_kw
+	ld b,a                      ; B = ลำดับตัวอักษร 0..25
+	ld hl,KW_TABLE_N
+	ld a,(SHIFT_STATE)
+	bit 0,a
+	jr nz,.kw_find              ; SHIFT ไม่ได้กด
+	ld hl,KW_TABLE_S
+.kw_find:
+	inc b
+	jr .kw_next
+.kw_skip:
+	ld a,(hl)
+	inc hl
+	or a
+	jr nz,.kw_skip
+.kw_next:
+	djnz .kw_skip
+.kw_push:
+	ld a,(hl)
+	or a
+	jp z,.push_after
+	push hl
+	call QUEUE_PUSH_CHAR
+	pop hl
+	inc hl
+	jr .kw_push
+.no_kw:
 	ld a,(ix+INPUT_MODE)
 	or a
 	jr z,.passthrough          ; ผู้ใช้ปิดโหมดประกอบอักษร (INPUTOFF/ยังไม่ toggle) -- ปล่อยผ่าน
+	; 9.30: ต้นฉบับกลับเป็นอังกฤษเองเมื่อกด Enter ใน direct mode ($50F6-$510C) -- ไม่ทำตาม เพราะผู้ใช้เคย
+	; รายงานอาการนี้ว่าเป็นบั๊ก (บั๊กจริงข้อ 12 รอบสอง: "กด enter แล้วกลับเป็นภาษาอังกฤษ")
 	; *** บั๊กจริงข้อ 9 (แก้แล้ว) + บั๊กจริงข้อ 11 (แก้แล้ว, แทนที่ตรรกะเช็ค SHIFT_STATE เดิมทั้งหมด) ***
 	; ดู comment ใหญ่เหนือ KEYC_THAI_TABLE_N ด้านบนสำหรับรายละเอียดการวิเคราะห์จาก disassembly จริง
 	; ($4D10-$4E53 ของต้นฉบับ) -- เช็คทีละบิตตรง ๆ (bit0=SHIFT, bit1=CTRL, bit2=GRAPH, active-low)
@@ -507,20 +548,7 @@ KEYC_BODY:
 	; ต่อจากนี้ห้ามใช้ HL อีกเด็ดขาด ใช้ absolute addressing ล้วน ๆ แทน (LD A,(nn)/LD (nn),A)
 	ld a,(ix+INPUT_MODE)
 	cpl
-	ld (ix+INPUT_MODE),a
-	ld b,a                    ; B = ค่า flag ใหม่หลัง toggle (เอาไว้ผสม bit7 ด้านล่าง)
-	; เสียง/LED click แบบเดียวกับต้นฉบับ (มาตรฐาน PSG port, portable ทุก generation)
-	ld a,15
-	out ($A0),a
-	in a,($A2)
-	and $7F
-	ld c,a                    ; C = ค่า PSG r15 เดิม (bit7 ถูก mask ออก) -- ไม่ต้องใช้ค่า scan
-	                          ; code เดิมใน C แล้ว ณ จุดนี้ ปลอดภัยที่จะใช้ซ้ำ
-	ld a,b
-	and $80
-	or c
-	out ($A1),a
-	call CUR_REDRAW           ; 9.21: เปลี่ยนรูป cursor ทันที (คงทุก register)
+	call SET_INPUT_MODE        ; 9.30: ตั้ง flag + LED + cursor (ใช้ร่วมกับ Enter ใน direct mode)
 	ld a,SAFE_DISPATCH_A      ; *** บั๊กจริงข้อ 10 -- เหมือนกับ .lookup ด้านบน (ค่า A จาก OUT ($A1)
 	                          ; เป็นขยะสำหรับตาราง dispatch ของ BIOS ต้องเขียนทับก่อน SCF เสมอ) ***
 	scf                       ; carry=1 = "จัดการคีย์นี้แล้ว"
@@ -531,6 +559,25 @@ KEYC_BODY:
 ; คือ ROM ของเราแน่นอนอยู่แล้ว เพราะกำลังรันมาจาก CALL THAION -- logic เดียวกับที่ฝังซ้ำไว้ใน
 ; KEYC_TRAMPOLINE_SRC ด้านบน แยกเป็น routine ต่างหากที่นี่เพื่อไม่ต้องเขียนซ้ำสองที่ในเนื้อ ROM
 ; แต่ตัว trampoline เองห้ามเรียก routine นี้เด็ดขาด ดู comment ด้านบน)
+; SET_INPUT_MODE: A = ค่าใหม่ของ INPUT_MODE (0/$FF) -- ตั้ง flag, ไฟ LED (PSG r15 bit7) และวาด cursor ใหม่
+; ทำลาย AF เท่านั้น
+SET_INPUT_MODE:
+	push bc
+	ld (ix+INPUT_MODE),a
+	ld b,a
+	ld a,15
+	out ($A0),a
+	in a,($A2)
+	and $7F
+	ld c,a
+	ld a,b
+	and $80
+	or c
+	out ($A1),a
+	call CUR_REDRAW           ; 9.21: เปลี่ยนรูป cursor ทันที (คงทุก register)
+	pop bc
+	ret
+
 GET_MY_SLOT:
 	call RSLREG
 	rrca

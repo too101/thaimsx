@@ -82,6 +82,10 @@ INIT_BODY:
 	ld (ix+INPUT_MODE),a
 	ld (ix+PRINT_MODE),a
 	ld (ix+PLOCK_MODE),a
+	ld a,(SHIFT_STATE)            ; 9.30 (A5): CODE ค้างตอนเปิดเครื่อง -> ไม่เปิดระบบไทย (bit4 = 0 เมื่อกด)
+	cpl
+	and $10
+	ld (ix+BOOT_SKIP),a
 	ld a,(H_READ)
 	cp RST30_OPCODE
 	jr nz,.init_hook
@@ -115,29 +119,42 @@ BOOT_BODY:
 	ld bc,5
 	ldir
 	ei
-	call THAION_CORE
-	ld a,(CSRX)                   ; ข้อความ "Bytes free" ของ MSX1 ไม่ขึ้นบรรทัดใหม่ให้ (BASIC ขึ้นให้เอง
-	dec a                         ; หลัง H.READ) -- ขึ้นบรรทัดก่อนพิมพ์ banner ถ้า cursor ไม่อยู่ต้นบรรทัด
-	jr z,.bh_col1
-	ld a,13
-	call CHPUT_IX
-	ld a,10
-	call CHPUT_IX
-.bh_col1:
-	ld hl,BOOT_BANNER
-.bh_loop:
-	ld a,(hl)
+	; 9.30 (A5): กดปุ่ม CODE ค้างตอนเปิดเครื่อง = เข้า BASIC ปกติ ไม่เปิดระบบไทย (ต้นฉบับ $40EA-$411A)
+	; เช็คทั้งตอน INIT (BOOT_SKIP) และตอนนี้ -- เผื่อกดหลัง/ปล่อยก่อนช่วงใดช่วงหนึ่ง
+	ld a,(ix+BOOT_SKIP)
 	or a
-	jr z,.bh_done
-	call CHPUT_IX
-	inc hl
-	jr .bh_loop
-.bh_done:
+	jr nz,.bh_skip
+	ld a,(SHIFT_STATE)
+	bit 4,a
+	jr z,.bh_skip
+	call THAION_CORE
+	call PRINT_BANNER
+.bh_skip:
 	pop af
 	pop bc
 	pop de
 	pop hl
 	ret                           ; 9.27: wrapper BOOT_HOOK (workram.asm) กระโดดต่อ H_READ ให้
+
+; PRINT_BANNER: พิมพ์ "BASIC ไทย version 1.0" (ขึ้นบรรทัดใหม่ก่อนถ้า cursor ไม่อยู่ต้นบรรทัด) -- ใช้ตอนบูต
+; และ CALL SYSTEM -- ทำลาย AF, HL
+PRINT_BANNER:
+	ld a,(CSRX)                   ; ข้อความ "Bytes free" ของ MSX1 ไม่ขึ้นบรรทัดใหม่ให้ (BASIC ขึ้นให้เอง
+	dec a                         ; หลัง H.READ) -- ขึ้นบรรทัดก่อนพิมพ์ banner ถ้า cursor ไม่อยู่ต้นบรรทัด
+	jr z,.pb_col1
+	ld a,13
+	call CHPUT_IX
+	ld a,10
+	call CHPUT_IX
+.pb_col1:
+	ld hl,BOOT_BANNER
+.pb_loop:
+	ld a,(hl)
+	or a
+	ret z
+	call CHPUT_IX
+	inc hl
+	jr .pb_loop
 
 BOOT_BANNER:
 	db "BASIC ",$E4,$B7,$C2," version 1.0",13,10,0   ; "BASIC ไทย version 1.0" (TIS-620: ไ=$E4 ท=$B7 ย=$C2)

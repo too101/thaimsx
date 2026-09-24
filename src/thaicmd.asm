@@ -33,15 +33,15 @@ CMDTAB:
 	db "THAIOFF",0
 	dw CMD_THAIOFF
 	db "SYSTEM",0
-	dw CMD_STUB
+	dw CMD_SYSTEM
 	db "LPRINT",0
 	dw CMD_STUB
 	db "ANSTR",0
-	dw CMD_STUB
+	dw CMD_ANSTR
 	db "TNSTR",0
-	dw CMD_STUB
+	dw CMD_TNSTR
 	db "MLSTR",0
-	dw CMD_STUB
+	dw CMD_MLSTR
 	db $FF
 
 ; --- flag toggle handlers -------------------------------------------------
@@ -173,6 +173,160 @@ CMD_THAIOFF:
 	call PRINTHOOK_UNINSTALL
 	pop hl
 	jp STMT_DONE
+
+; --- 9.30 (A4): CALL SYSTEM -- แสดงข้อความเวอร์ชันของระบบ (ต้นฉบับ $42EA ตั้ง H.READ ให้พิมพ์ข้อความเวอร์ชัน
+; ตอน "Ok" ถัดไป -- ของเราพิมพ์ทันที ผลที่เห็นเหมือนกัน)
+CMD_SYSTEM:
+	pop hl
+	push hl
+	call PRINT_BANNER
+	pop hl
+	jp STMT_DONE
+
+; --- 9.30 (B): CALL ANSTR/TNSTR/MLSTR(<สตริง>,<ตัวแปรสตริง>) -- ตามต้นฉบับ $43E4-$44FB ---
+;   ANSTR: เลขไทย ๐-๙ ($F0-$F9) -> เลขอารบิก 0-9
+;   TNSTR: เลข 0-9 -> เลขไทย ๐-๙
+;   MLSTR: ตัดสระบน/สระล่าง/วรรณยุกต์ (และ glyph ผสม) ออก เหลือเฉพาะตัวแถวกลาง
+; ต้องใช้ routine ภายในของ BASIC ROM (ประเมินนิพจน์/หาตัวแปร/จองที่ใน string space) ผ่าน CALBAS แบบเดียว
+; กับต้นฉบับ -- ตรวจแล้วว่า code ที่ address เหล่านี้เหมือนกันทุกไบต์บน MSX1/MSX2/MSX2+ (ดู equates.asm)
+; ผลลัพธ์พักไว้ที่ BUF+3 (buffer บรรทัดที่พิมพ์ -- ถูกแปลงเป็น token ใน KBUF แล้วตอนคำสั่งทำงาน) ก่อนจองที่จริง
+; เพราะการจองที่อาจเก็บขยะ string แล้วย้ายสตริงต้นทาง
+CMD_ANSTR:
+	ld c,0
+	jr STRFN
+CMD_TNSTR:
+	ld c,1
+	jr STRFN
+CMD_MLSTR:
+	ld c,2
+STRFN:
+	ld (ix+SF_KIND),c
+	pop hl                        ; HL = ข้อความหลังชื่อคำสั่ง
+	call SKIPSP
+	cp '('
+	jp nz,SF_SNERR
+	inc hl
+	BCALL BAS_FRMEVL              ; ประเมินนิพจน์ -> DAC, HL = ต่อจากนิพจน์
+	call SKIPSP
+	cp ','
+	jp nz,SF_SNERR
+	push hl                       ; ข้อความ (ที่ ',')
+	BCALL BAS_GETYPR              ; Z = ผลเป็นสตริง
+	jp nz,SF_TMERR
+	BCALL BAS_FRESTR              ; HL -> descriptor (ความยาว, address)
+	ld b,(hl)
+	inc hl
+	ld a,(hl)
+	inc hl
+	ld h,(hl)
+	ld l,a                        ; HL = ตัวอักษร, B = ความยาว
+	ld de,BUF+3
+	ld c,0                        ; C = ความยาวผลลัพธ์
+	ld a,b
+	or a
+	jr z,.sf_done
+.sf_loop:
+	ld a,(hl)
+	inc hl
+	call SF_CONV                  ; A = ตัวใหม่, carry = ตัดทิ้ง
+	jr c,.sf_drop
+	ld (de),a
+	inc de
+	inc c
+.sf_drop:
+	djnz .sf_loop
+.sf_done:
+	ld hl,BUF                     ; descriptor ชั่วคราว: ความยาว, BUF+3
+	ld (hl),c
+	inc hl
+	ld (hl),(BUF+3) and $FF
+	inc hl
+	ld (hl),(BUF+3)/256
+	ld hl,BUF
+	BCALL BAS_STRCPY              ; คัดลอกเข้า string space -> DE = descriptor ชั่วคราวใหม่
+	pop hl                        ; HL = ข้อความ (ที่ ',')
+	push de
+	BCALL BAS_CHRGTR              ; ข้าม ','
+	BCALL BAS_PTRGET              ; DE = ตัวแปร
+	ld a,(VALTYP)
+	cp 3
+	jp nz,SF_TMERR
+	ex (sp),hl                    ; HL = descriptor ใหม่, (sp) = ข้อความ
+	ldi
+	ldi
+	ldi                           ; ตัวแปร = สตริงผลลัพธ์ (เหมือนต้นฉบับ)
+	pop hl
+	call SKIPSP
+	cp ')'
+	jp nz,SF_SNERR
+	BCALL BAS_CHRGTR              ; ข้าม ')'
+	jp STMT_DONE
+
+; SF_CONV: A = ตัวอักษร, ชนิดใน (ix+SF_KIND) -> A = ตัวใหม่ (carry=1 = ตัดทิ้ง) -- คง BC/DE/HL
+SF_CONV:
+	push bc
+	ld c,a
+	ld a,(ix+SF_KIND)
+	or a
+	jr nz,.cv_tn
+	ld a,c                        ; ANSTR
+	cp $F0
+	jr c,.cv_keep
+	cp $FA
+	jr nc,.cv_keep
+	and $3F                       ; $F0-$F9 -> '0'-'9'
+	jr .cv_out
+.cv_tn:
+	dec a
+	jr nz,.cv_ml
+	ld a,c                        ; TNSTR
+	cp '0'
+	jr c,.cv_keep
+	cp '9'+1
+	jr nc,.cv_keep
+	or $C0                        ; '0'-'9' -> $F0-$F9
+	jr .cv_out
+.cv_ml:
+	push hl                       ; MLSTR: ตัดตัวที่อยู่ในตาราง
+	ld hl,ML_DROP
+	ld b,ML_DROP_LEN
+	ld a,c
+.cv_scan:
+	cp (hl)
+	jr z,.cv_drop
+	inc hl
+	djnz .cv_scan
+	pop hl
+.cv_keep:
+	ld a,c
+.cv_out:
+	pop bc
+	or a                          ; carry = 0
+	ret
+.cv_drop:
+	pop hl
+	pop bc
+	scf
+	ret
+
+; ตัวที่ MLSTR ตัดทิ้ง (ตรงตามตารางต้นฉบับ $55A0): glyph ผสม $82-$9D, สระบน/ล่าง, วรรณยุกต์, $FC/$FD
+ML_DROP:
+	db $82,$83,$85,$86,$87,$88,$89,$8A,$8B,$8D,$8E,$8F,$90,$91,$92,$93,$94,$95,$96,$97,$98,$99,$9A,$9B,$9C,$9D
+	db $D1,$D4,$D5,$D6,$D7,$D8,$D9,$E7,$E8,$E9,$EA,$EB,$EC,$ED,$FC,$FD
+ML_DROP_LEN equ $-ML_DROP
+
+; SKIPSP: ข้ามช่องว่าง -> A = (HL)
+SKIPSP:
+	ld a,(hl)
+	cp ' '
+	ret nz
+	inc hl
+	jr SKIPSP
+
+SF_SNERR:
+	BCALL BAS_SNERR               ; "Syntax error" (ไม่กลับมา -- BASIC ตั้ง stack ใหม่เอง)
+SF_TMERR:
+	BCALL BAS_TMERR               ; "Type mismatch"
 
 ; --- stub สำหรับคำสั่งที่ยังไม่ implement (Phase 4) ------------------------
 CMD_STUB:

@@ -22,3 +22,4 @@
 	include "src/printon.asm"
 	include "src/font_data.asm"
 	include "src/kbtables_data.asm"
+	include "src/kwtables_data.asm"
