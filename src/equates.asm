@@ -133,6 +133,8 @@ STKTOP      equ $F674   ; ขอบบนของ stack BASIC
 FRETOP      equ $F69B   ; ตำแหน่งว่างถัดไปใน string space (BASIC ตั้ง = MEMSIZ ตอน NEW/CLEAR)
 DOS_AREA    equ $F1C9   ; 9.29: ต้นพื้นที่ระบบ DOS ($F1C9-$F37F) ที่ disk ROM ตัวหลักใช้ตายตัว
 SAVSTK      equ $F6B1   ; stack ที่ BASIC จำไว้ (STKTOP-2)
+CAPST       equ $FCAB   ; 9.32: สถานะ CAPS LOCK ของ BIOS (ไม่เป็น 0 = เปิด)
+NEWKEY_R2   equ $FBE7   ; 9.32: matrix แถว 2 (bit5 = ปุ่ม scan $15, 0 = กดอยู่)
 CURLIN      equ $F41C   ; 9.30: เลขบรรทัดที่กำลังทำงาน ($FFFF = direct mode)
 HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
 WORK_SIZE   equ $FD5E-SLTWRK_OLD

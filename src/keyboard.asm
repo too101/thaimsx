@@ -446,13 +446,13 @@ KEYC_BODY:
 	ld a,THAI_DEL_CODE
 .bsdel_push:
 	call QUEUE_PUSH_CHAR
-	jr .push_after
+	jp .push_after
 .not_bsdel:
 
 	; --- ส่วนที่ 2: พิมพ์อักษรไทยแบบเรียบ (ดูหัวข้อ 5) ---
 	ld a,(ix+THAI_MODE)
 	or a
-	jr z,.passthrough          ; cartridge ยังไม่ได้ THAION -- ปล่อยผ่านตามปกติ
+	jp z,.passthrough          ; cartridge ยังไม่ได้ THAION -- ปล่อยผ่านตามปกติ
 	; ---- 9.30 (A1): GRAPH+A..Z พิมพ์คำสั่ง BASIC ทั้งคำ (+SHIFT = ชุดที่สอง) -- ตามต้นฉบับ $4D17-$4D21 ->
 	; $4F0B: ทำงานทุกครั้งที่ THAION อยู่ ไม่ว่าจะพิมพ์ไทยหรืออังกฤษ (CTRL+GRAPH ปล่อยผ่าน)
 	ld a,(SHIFT_STATE)
@@ -525,25 +525,58 @@ KEYC_BODY:
 	jr z,.passthrough           ; GRAPH กดอยู่ (bit2=0) -- ปล่อยผ่านเสมอ (ตรงกับต้นฉบับ $4D1F -- ไม่
 	                            ; implement การประกอบอักษรกราฟิกพิเศษของ GRAPH ในต้นฉบับ นอกขอบเขต
 	                            ; Phase 3 ส่วนที่ 1)
+	; ---- 9.32 (D): ตรงตามต้นฉบับ $4E53-$4EAA ----
+	; D1: CAPS LOCK เปิดอยู่ (CAPST, BIOS สลับให้เองเมื่อกด CAPS) = ล็อก Shift ไทย -> ใช้ตารางกด Shift
+	; D2: กดปุ่ม scan $15 (matrix แถว 2 bit 5 -- ปุ่มนี้ไม่มีอักษรไทยของตัวเอง) ค้างไว้แล้วกด
+	;     J (scan $20) = ๅ ($E5) / กับ Shift หรือ CAPS: O (scan $25) = ฦๅ ($80)
+	; D3: บางตัวต้นฉบับดันเป็น 2 ไบต์: $85 -> ั+้ ($D1 $E9), ำ ($D3) -> ํ+า ($ED $D2) ให้โปรแกรมเก็บแบบแยก
+	;     ตัวบน/ตัวกลาง (PRINTON วาด ํ ที่แถวบนและผสมกับวรรณยุกต์ได้)
 	ld hl,THAI_UNSHIFTED_TABLE
 	bit 0,a
-	jr nz,.gottable              ; SHIFT ไม่ได้กดอยู่ (bit0=1, idle จริงตามบั๊กข้อ 9) -- ใช้ตารางไม่กด
-	                            ; Shift (ค่า default ที่โหลดไว้ด้านบนแล้ว)
-	ld hl,THAI_SHIFTED_TABLE    ; SHIFT กดอยู่ (bit0=0) -- *** บั๊กจริงข้อ 11 *** ใช้ตารางกด Shift แทน
-.gottable:
-
+	jr z,.shifted               ; SHIFT กดอยู่ (bit0=0)
+	ld a,(CAPST)
+	or a
+	jr nz,.shifted              ; D1
+	ld a,(NEWKEY_R2)
+	bit 5,a
+	jr nz,.lookup               ; ไม่ได้กดปุ่ม $15 ค้าง
+	ld a,c
+	cp $20
+	jr nz,.lookup
+	ld a,$E5                    ; D2: ๅ
+	jr .push1
+.shifted:
+	ld hl,THAI_SHIFTED_TABLE    ; *** บั๊กจริงข้อ 11 *** ตารางกด Shift
+	ld a,(NEWKEY_R2)
+	bit 5,a
+	jr nz,.lookup
+	ld a,c
+	cp $25
+	jr nz,.lookup
+	ld a,$80                    ; D2: ฦๅ
+	jr .push1
 .lookup:
-	; A = scan code เดิม (ตารางรวมเป็นตัวเดียวแล้วตั้งแต่บั๊กข้อ 11 -- index ด้วย scan code ตรง ๆ ไม่
-	; ต้อง sub offset อีกต่อไป), HL = ตารางที่เลือกไว้ด้านบน (ไม่กด/กด Shift)
-	; *** ต้องคง C (scan code เดิม) ไว้ให้ครบ -- ครอบด้วย PUSH/POP BC ทั้งก้อน ดูบั๊กจริงข้อ 3
-	; หัวข้อ 4 ด้านล่าง: ห้ามใช้ "LD C,A" ทับ C แล้วปล่อยให้หลุดไปถึง .passthrough โดยไม่คืนค่า ***
+	; HL = ตารางที่เลือก, index ด้วย scan code ตรง ๆ -- *** ต้องคง C (scan code เดิม) ไว้ (บั๊กจริงข้อ 3) ***
 	push bc
 	ld b,0
 	add hl,bc
 	ld a,(hl)
 	pop bc
 	cp $FF
-	jr z,.passthrough          ; คีย์นี้ไม่มี mapping ไทยในต้นฉบับ -- ปล่อยผ่าน (ดูหัวข้อ 5.2)
+	jr z,.push_after            ; ปุ่ม $15 -- ต้นฉบับไม่พิมพ์อะไร (ใช้เป็นปุ่มกดค้างของ D2)
+	cp $85
+	jr nz,.not85
+	ld a,$D1                    ; D3: ั ้
+	call QUEUE_PUSH_CHAR
+	ld a,$E9
+	jr .push1
+.not85:
+	cp $D3
+	jr nz,.push1
+	ld a,$ED                    ; D3: ํ า
+	call QUEUE_PUSH_CHAR
+	ld a,$D2
+.push1:
 	call QUEUE_PUSH_CHAR        ; ดัน font code ของอักษรไทยเข้าคิวคีย์บอร์ด
 .push_after:
 	pop hl                      ; *** คืน HL ให้ตรงเดิมเสมอ (บั๊กจริงข้อ 1) ***

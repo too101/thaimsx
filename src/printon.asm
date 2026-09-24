@@ -577,9 +577,9 @@ PRINTHOOK_BODY:
 	; --- ขั้น 4: แยกตาม class ---
 	ld a,b
 	cp 3
-	jr z,.lower_vowel            ; class=3 (สระล่าง) -- ซ้อนแถว+1 เสมอ ไม่มีการผสมใด ๆ
+	jp z,.lower_vowel            ; class=3 (สระล่าง) -- ซ้อนแถว+1 เสมอ ไม่มีการผสมใด ๆ
 	cp 1
-	jp z,.place_row_minus1       ; class=1 (สระบน) -- วางแถว-1 เปล่า ๆ (ยังไม่มีอะไรให้ผสมตอนนี้ --
+	jp z,.upper_vowel            ; class=1 (สระบน) 9.32: ํ หลังวรรณยุกต์ผสมได้ -- เดิม: -- วางแถว-1 เปล่า ๆ (ยังไม่มีอะไรให้ผสมตอนนี้ --
 	                              ; ถ้าวรรณยุกต์ตามมาทีหลัง ค่อยมาผสมทับตอนนั้น ดูขั้นล่าง)
 
 	; class=2 (วรรณยุกต์) -- เช็คว่าแถว-1 คอลัมน์เดียวกันมีสระบนอยู่แล้วหรือไม่ ถ้ามี **ต้องผสม
@@ -638,6 +638,46 @@ PRINTHOOK_BODY:
 	jp .place_row_minus1          ; ตกลงไปวาดที่แถว-1 ตามปกติ (BIOS จะวาดวรรณยุกต์ตัวเปล่าทับ
 	                               ; ตำแหน่งนี้ไปก่อน -- ผิดชั่วคราว 1 จังหวะ แล้วค่อยแก้เป็น glyph
 	                               ; ผสมตอนเรียก PRINTHOOK ครั้งถัดไปตามที่เตรียมไว้ข้างบน)
+
+; 9.32: ํ ($ED) ที่ตามหลังวรรณยุกต์ -- เกิดจาก ำ ที่แป้นพิมพ์ดันเป็น ํ+า (ต้นฉบับ $4E9C) เช่น น้ำ = น ้ ํ า
+; ช่องแถวบนมีวรรณยุกต์อยู่แล้ว -> ผสมเป็น glyph ํ+วรรณยุกต์ ($9A-$9D) แบบเดียวกับสระบน+วรรณยุกต์ (ถ้า BS
+; ทันทีจะคืนเป็นวรรณยุกต์ตัวเดิม) -- สระบนอื่นวางทับตามเดิม
+.upper_vowel:
+	ld a,c
+	cp $ED
+	jp nz,.place_row_minus1
+	ld a,(ix+MARK_ROW)
+	dec a
+	jp m,.place_row_minus1
+	jp z,.place_row_minus1
+	push bc
+	call NAMETAB_ADDR
+	pop bc
+	call RDVRM
+	ld d,a                        ; D = ตัวในช่องแถวบน
+	call CLASSIFY_THAI_MARK
+	cp 2
+	jp nz,.place_row_minus1       ; ไม่ใช่วรรณยุกต์
+	push bc
+	ld c,d                        ; C = วรรณยุกต์
+	ld a,$ED
+	call COMBINE_LOOKUP
+	pop bc
+	jp nc,.place_row_minus1
+	ld (ix+PRINT_COMBINE_CODE),a
+	ld a,(ix+MARK_ROW)
+	dec a
+	ld (ix+PRINT_COMBINE_ROW),a
+	ld (ix+PRINT_LAST_MARK_ROW),a
+	ld a,e
+	ld (ix+PRINT_COMBINE_COL),a
+	ld (ix+PRINT_LAST_MARK_COL),a
+	ld a,d
+	ld (ix+PRINT_LAST_MARK_VOWEL),a  ; BS ทันที -> คืนวรรณยุกต์
+	ld a,TRUE
+	ld (ix+PRINT_COMBINE_PENDING),a
+	ld (ix+PRINT_LAST_MARK_VALID),a
+	jp .place_row_minus1
 
 .lower_vowel:
 	; class=3 (สระล่าง อุ/อู) -- ซ้อนแถว+1 เสมอ (ใต้พยัญชนะ) ไม่มีการผสมกับวรรณยุกต์ใด ๆ (วรรณยุกต์
@@ -1038,6 +1078,12 @@ INLIN_REBUILD:
 	ld a,c
 	call DECOMBINE                ; -> A = สระบน, C = วรรณยุกต์
 	jr nc,.rb_next
+	cp $ED                        ; 9.32: ํ+วรรณยุกต์ มาจาก ำ (น้ำ = น ้ ํ า) -> เก็บวรรณยุกต์ก่อน ตามลำดับที่พิมพ์
+	jr nz,.rb_vt
+	ld b,a
+	ld a,c
+	ld c,b
+.rb_vt:
 	call RB_EMIT
 	ld a,c
 	call RB_EMIT
