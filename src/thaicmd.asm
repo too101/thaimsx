@@ -116,8 +116,7 @@ CMD_THAION:
 	pop hl
 	push hl
 	call THAION_CORE
-	ld a,$0C                 ; 9.31: ล้างจอตามต้นฉบับ ($42AE) -- ตอนบูต (BOOT_BODY) ไม่ล้าง
-	call CHPUT_IX
+	call PRINT_BANNER        ; 9.34 (ผู้ใช้ขอ): ไม่ล้างจอ -- พิมพ์ข้อความเวอร์ชันแบบ CALL SYSTEM แทน
 	pop hl
 	jp STMT_DONE
 

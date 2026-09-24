@@ -529,8 +529,7 @@ KEYC_BODY:
 	; D1: CAPS LOCK เปิดอยู่ (CAPST, BIOS สลับให้เองเมื่อกด CAPS) = ล็อก Shift ไทย -> ใช้ตารางกด Shift
 	; D2: กดปุ่ม scan $15 (matrix แถว 2 bit 5 -- ปุ่มนี้ไม่มีอักษรไทยของตัวเอง) ค้างไว้แล้วกด
 	;     J (scan $20) = ๅ ($E5) / กับ Shift หรือ CAPS: O (scan $25) = ฦๅ ($80)
-	; D3: บางตัวต้นฉบับดันเป็น 2 ไบต์: $85 -> ั+้ ($D1 $E9), ำ ($D3) -> ํ+า ($ED $D2) ให้โปรแกรมเก็บแบบแยก
-	;     ตัวบน/ตัวกลาง (PRINTON วาด ํ ที่แถวบนและผสมกับวรรณยุกต์ได้)
+	; D3 (9.34 ผู้ใช้ขอ): ไม่แยกเป็น 2 ไบต์แบบต้นฉบับ -- ำ เก็บเป็น $D3 ตัวเดียว, Shift+7 = ฿ ($DF)
 	ld hl,THAI_UNSHIFTED_TABLE
 	bit 0,a
 	jr z,.shifted               ; SHIFT กดอยู่ (bit0=0)
@@ -564,18 +563,6 @@ KEYC_BODY:
 	pop bc
 	cp $FF
 	jr z,.push_after            ; ปุ่ม $15 -- ต้นฉบับไม่พิมพ์อะไร (ใช้เป็นปุ่มกดค้างของ D2)
-	cp $85
-	jr nz,.not85
-	ld a,$D1                    ; D3: ั ้
-	call QUEUE_PUSH_CHAR
-	ld a,$E9
-	jr .push1
-.not85:
-	cp $D3
-	jr nz,.push1
-	ld a,$ED                    ; D3: ํ า
-	call QUEUE_PUSH_CHAR
-	ld a,$D2
 .push1:
 	call QUEUE_PUSH_CHAR        ; ดัน font code ของอักษรไทยเข้าคิวคีย์บอร์ด
 .push_after:
@@ -758,7 +745,7 @@ THAI_UNSHIFTED_TABLE:
 ; THAI_SHIFTED_TABLE: 48 ไบต์ ตรงกับ scan code $00-$2F เท่ากัน แต่ใช้ตอนกด Shift ค้าง (บั๊กจริงข้อ 11)
 ; -- จาก ROM offset 0x4EDB -- ยังไม่ได้ไล่ความหมายทีละตัวอักษร (เหตุผลเดียวกับแถวตัวเลขด้านบน)
 THAI_SHIFTED_TABLE:
-	db $F7,$A5,$F1,$F2,$F3,$F4,$D9,$85   ; scan $00-$07
+	db $F7,$A5,$F1,$F2,$F3,$F4,$D9,$DF   ; scan $00-$07 -- 9.34: Shift+7 = ฿ ($DF) ตามที่ผู้ใช้ขอ (ต้นฉบับ $85 = ั้)
 	db $F5,$F6,$F8,$F9,$2D,$B0,$2C,$AB   ; scan $08-$0F
 	db $2E,$2B,$B2,$CC,$C6,$FF,$C4,$FD   ; scan $10-$17 -- 9.24: Shift+' (ปุ่มเดียวกับ ง) = "." จริงตามแป้นเกษมณี (เดิม $DA)
 	db $A9,$AF,$AE,$E2,$AC,$E7,$B3,$EB   ; scan $18-$1F
