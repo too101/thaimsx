@@ -1588,13 +1588,27 @@ SHIFTROW_R:
 	pop de
 	ret
 
-; SELECT_TOGGLE (9.30 A2): สลับ PRINTON/PRINTOFF แล้วล้างจอ -- ตามต้นฉบับ $512E-$5150 (ล้างจอเพราะข้อความ
-; ที่วาดไว้แบบเก่าอ่านไม่ได้ในอีกแบบ) -- ถ้า PLOCKON อยู่ไม่ทำอะไร -- ล้างจอด้วย CHPUT($0C) ซ้อน ซึ่งผ่าน
-; PRINTHOOK อีกรอบตามโหมดใหม่ -- ทำลาย AF, HL
+; SELECT_TOGGLE (9.30 A2): ปุ่ม SELECT -- สลับ PRINTON/PRINTOFF (PRINT_SWITCH) ถ้าไม่ได้ PLOCKON แล้วถ้าอยู่
+; direct mode (SELECT มาจาก INLIN ของบรรทัดคำสั่ง) ตั้ง INLIN_ACTIVE ตามโหมดใหม่ ให้บรรทัดที่กำลังพิมพ์ประกอบ
+; สระบน/ล่างกลับเข้า BUF ได้ (INLIN_HOOK ตั้งไว้ตามโหมดเดิม) -- ทำลาย AF, HL
 SELECT_TOGGLE:
 	ld a,(ix+PLOCK_MODE)
 	or a
 	ret nz
+	call PRINT_SWITCH
+	ld hl,(CURLIN)
+	inc hl
+	ld a,h
+	or l
+	ret nz
+	ld a,(ix+PRINT_MODE)
+	ld (ix+INLIN_ACTIVE),a
+	ret
+
+; PRINT_SWITCH: สลับ PRINTON/PRINTOFF แล้วล้างจอ -- ตามต้นฉบับ $512E-$5150 (ใช้ทั้ง SELECT และ CALL PRINTON/
+; PRINTOFF 9.31) ล้างจอเพราะข้อความที่วาดไว้แบบเก่าอ่านไม่ได้ในอีกแบบ -- ล้างด้วย CHPUT($0C) ซ้อน ซึ่งผ่าน
+; PRINTHOOK อีกรอบตามโหมดใหม่ -- ทำลาย AF
+PRINT_SWITCH:
 	ld a,(ix+PRINT_MODE)
 	cpl
 	ld (ix+PRINT_MODE),a
@@ -1622,13 +1636,6 @@ SELECT_TOGGLE:
 	ld (FSTPOS),a
 	ld a,1
 	ld (FSTPOS+1),a
-	ld hl,(CURLIN)                ; direct mode = SELECT มาจาก INLIN ของบรรทัดคำสั่ง -> บรรทัดนี้ต้อง
-	inc hl                        ; ประกอบสระบน/ล่างกลับเข้า BUF ตามโหมดใหม่ (INLIN_HOOK ตั้งไว้ตามโหมดเดิม)
-	ld a,h
-	or l
-	ret nz
-	ld a,(ix+PRINT_MODE)
-	ld (ix+INLIN_ACTIVE),a
 	ret
 
 ; RB_WRITE: เขียน A ลงช่อง (RB_ROW, RB_COL) -- คง BC/DE

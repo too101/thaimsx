@@ -149,10 +149,11 @@ after realtime 15.6 {
     set n [expr {[keyq_tail] - $base}]
     set kbuf [debug read_block "memory" [expr {0xFBF0 + $base}] $n]
     binary scan $kbuf cu$n got
-    if {$got == 191} {
-        puts $outf "PASS: 'a' หลังกด Enter -> $got (ยังเป็นไทยปกติ -- บั๊กจริงข้อ 12 รอบสองแก้แล้ว)"
+    # 9.31: Enter ใน direct mode กลับเป็นอังกฤษโดยตั้งใจ (ตามต้นฉบับ -- ผู้ใช้ขอ) จึงต้องได้ 'a' = 97
+    if {$got == 97} {
+        puts $outf "PASS: 'a' หลังกด Enter -> $got (กลับเป็นอังกฤษตามต้นฉบับ 9.31)"
     } else {
-        puts $outf "FAIL: 'a' หลังกด Enter -> $got (expected 191) -- อาการที่ผู้ใช้รายงานรอบสอง"
+        puts $outf "FAIL: 'a' หลังกด Enter -> $got (expected 97 -- 9.31 Enter ใน direct mode = อังกฤษ)"
         set failed 1
     }
     puts $outf "RESULT: [expr {$failed ? {FAIL} : {ALL PASS}}]"

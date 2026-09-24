@@ -342,6 +342,7 @@
 
 KEYC_TOGGLE_CODE equ $34   ; scan/key code ของปุ่มสลับไทย/อังกฤษ (ยืนยันจาก ROM เดิม, ดูหัวข้อ 2)
 KEY_A_SCAN     equ $16   ; 9.30: A..Z = scan $16..$2F
+KEY_RET_SCAN   equ $3F   ; 9.31: RETURN (matrix แถว 7 bit 7)
 
 ; *** บั๊กจริงข้อ 10 (แก้แล้ว) -- ค่า A ตอนคืน carry=1 (SCF) ทำให้ BIOS ดันตัวอักษรซ้ำ ***
 ; หลังเปลี่ยนมาใช้ RST 30H (CALLF) แทน trampoline เดิม พบว่า BIOS's caller จริง (0x1025 CALL
@@ -493,8 +494,21 @@ KEYC_BODY:
 	ld a,(ix+INPUT_MODE)
 	or a
 	jr z,.passthrough          ; ผู้ใช้ปิดโหมดประกอบอักษร (INPUTOFF/ยังไม่ toggle) -- ปล่อยผ่าน
-	; 9.30: ต้นฉบับกลับเป็นอังกฤษเองเมื่อกด Enter ใน direct mode ($50F6-$510C) -- ไม่ทำตาม เพราะผู้ใช้เคย
-	; รายงานอาการนี้ว่าเป็นบั๊ก (บั๊กจริงข้อ 12 รอบสอง: "กด enter แล้วกลับเป็นภาษาอังกฤษ")
+	; ---- 9.31 (A3): กด Enter ใน direct mode (CURLIN=$FFFF) ขณะพิมพ์ไทย -> กลับเป็นอังกฤษเอง แล้วปล่อยผ่าน
+	; ให้ BIOS ดัน CR ตามปกติ (ต้นฉบับ $50F6-$510C: คำสั่ง BASIC พิมพ์เป็นอังกฤษ) -- ตอนโปรแกรมทำงาน (INPUT)
+	; ไม่สลับ -- ผู้ใช้ขอให้ทำตามต้นฉบับ (เดิมบั๊กข้อ 12 รอบสองคืออาการเดียวกันแต่เกิดจาก RAM ชน ไม่ได้ตั้งใจ)
+	ld a,c
+	cp KEY_RET_SCAN
+	jr nz,.not_ret
+	ld hl,(CURLIN)
+	inc hl
+	ld a,h
+	or l
+	jr nz,.passthrough
+	xor a
+	call SET_INPUT_MODE
+	jr .passthrough
+.not_ret:
 	; *** บั๊กจริงข้อ 9 (แก้แล้ว) + บั๊กจริงข้อ 11 (แก้แล้ว, แทนที่ตรรกะเช็ค SHIFT_STATE เดิมทั้งหมด) ***
 	; ดู comment ใหญ่เหนือ KEYC_THAI_TABLE_N ด้านบนสำหรับรายละเอียดการวิเคราะห์จาก disassembly จริง
 	; ($4D10-$4E53 ของต้นฉบับ) -- เช็คทีละบิตตรง ๆ (bit0=SHIFT, bit1=CTRL, bit2=GRAPH, active-low)

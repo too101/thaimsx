@@ -52,21 +52,23 @@ CMD_PRINTON:
 	ld a,(ix+PLOCK_MODE)
 	or a
 	jp nz,STMT_DONE          ; ถูกล็อกอยู่ -- ไม่ทำอะไร แต่ถือว่า "จัดการแล้ว"
-	ld a,TRUE
-	ld (ix+PRINT_MODE),a
-	jp STMT_DONE
+	ld a,(ix+PRINT_MODE)
+	or a
+	jp nz,STMT_DONE          ; เปิดอยู่แล้ว -- ไม่ล้างจอซ้ำ (ต้นฉบับ $4236: เรียก $512E เฉพาะตอนสถานะเปลี่ยน)
+	jr CMD_PRINT_SW
 
 CMD_PRINTOFF:
 	pop hl
 	ld a,(ix+PLOCK_MODE)
 	or a
 	jp nz,STMT_DONE
-	xor a
-	ld (ix+PRINT_MODE),a
-	; เปิด blinking-cursor กลับ (PRINTHOOK ปิดไว้ตอน PRINTON -- ดู comment เต็มที่
-	; CURSOR_BLINK_FLAG ใน equates.asm)
-	ld a,TRUE
-	ld (CURSOR_BLINK_FLAG),a
+	ld a,(ix+PRINT_MODE)
+	or a
+	jp z,STMT_DONE           ; ปิดอยู่แล้ว
+CMD_PRINT_SW:
+	push hl
+	call PRINT_SWITCH        ; 9.31: สลับ + ล้างจอตามต้นฉบับ
+	pop hl
 	jp STMT_DONE
 
 CMD_INPUTON:
@@ -114,6 +116,8 @@ CMD_THAION:
 	pop hl
 	push hl
 	call THAION_CORE
+	ld a,$0C                 ; 9.31: ล้างจอตามต้นฉบับ ($42AE) -- ตอนบูต (BOOT_BODY) ไม่ล้าง
+	call CHPUT_IX
 	pop hl
 	jp STMT_DONE
 
