@@ -44,10 +44,6 @@ LPTO_BODY:
 	jr z,.lp_lf
 	cp $20
 	jr c,.lp_pass                 ; รหัสควบคุมอื่น (CR, FF, ...) ส่งตรง
-	cp $DA
-	jr nz,.lp_nodot
-	ld c,'.'                      ; $DA = จุด '.' (ต้นฉบับ $56A4 -- ฟอนต์ต้นฉบับ $DA หน้าตาเหมือน '.') เป็นตัวปกติ
-.lp_nodot:
 	call PR_ISMARK                ; Z = สระบน/ล่าง/วรรณยุกต์
 	jr z,.lp_mark
 	ld a,(ix+PR_WIDTH)
@@ -95,6 +91,9 @@ LPTO_BODY:
 
 ; PR_ISMARK: C = ตัว -> Z ถ้าเป็นเครื่องหมาย (ตาราง ML_DROP เดียวกับ MLSTR = ตาราง $55A0 ของต้นฉบับ) -- ทำลาย A,B,HL
 PR_ISMARK:
+	ld a,c
+	cp $DA                        ; พินทุ: ต้นฉบับแปลงเป็น '.' แล้วนับเป็นช่องใหม่ในแถวกลาง ($56A4) ทำให้สระบนที่
+	ret z                         ; ตามหลังไปเกาะผิดช่อง -- ของเราถือเป็นสระล่าง พิมพ์ '.' ที่แถวล่างใต้พยัญชนะ
 	ld hl,ML_DROP
 	ld b,ML_DROP_LEN
 	ld a,c
@@ -220,6 +219,9 @@ PR_ROW:
 	jr nz,.pr_next
 .pr_put:
 	ld a,c
+	cp $DA
+	jr nz,.pr_setcell
+	ld a,'.'                      ; พินทุ -> '.' (เครื่องพิมพ์ไม่มีตัวนี้ -- ต้นฉบับแปลงเหมือนกัน)
 	jr .pr_setcell
 .pr_next:
 	pop de
