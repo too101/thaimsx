@@ -137,7 +137,7 @@ CAPST       equ $FCAB   ; 9.32: สถานะ CAPS LOCK ของ BIOS (ไม
 NEWKEY_R2   equ $FBE7   ; 9.32: matrix แถว 2 (bit5 = ปุ่ม scan $15, 0 = กดอยู่)
 CURLIN      equ $F41C   ; 9.30: เลขบรรทัดที่กำลังทำงาน ($FFFF = direct mode)
 HIMEM       equ $FC4A   ; ขอบบนของ RAM ที่ BASIC ใช้ -- ลดลงเพื่อจองพื้นที่ของเราเอง
-WORK_SIZE   equ $FD6C-SLTWRK_OLD
+WORK_SIZE   equ $FD74+PR_BUF_SIZE-SLTWRK_OLD
 INPUT_MODE  equ $FD11-SLTWRK_OLD   ; INPUTON/INPUTOFF flag (ประกอบอักษรตอนพิมพ์) -- ย้ายจาก $FCAC (บั๊กข้อ 12)
 THAI_MODE   equ $FD12-SLTWRK_OLD   ; THAION/THAIOFF สวิตช์ใหญ่ -- ย้ายจาก $FCAD (บั๊กข้อ 12)
 PRINT_MODE  equ $FD09-SLTWRK_OLD   ; PRINTON/PRINTOFF flag (แสดงผล 3 ระดับ) -- ยังไม่พบปัญหา คงตำแหน่งเดิมไว้
@@ -241,6 +241,15 @@ GR_LASTV       equ $FD5E-SLTWRK_OLD  ; 9.33: สระบนตัวล่า�
 GR_LASTT       equ $FD5F-SLTWRK_OLD  ; 9.33: วรรณยุกต์ตัวล่าสุด (โหมดกราฟิก)
 GR_CH          equ $FD60-SLTWRK_OLD  ; 9.33: ตัวที่กำลังวาด
 SAVED_CGPNT    equ $FD61-SLTWRK_OLD  ; 9.33: 3 ไบต์ ($FD61-$FD63) CGPNT เดิม (slot + address ฟอนต์) ก่อน THAION
+PR_WIDTH       equ $FD69-SLTWRK_OLD  ; 9.36: ความกว้างบรรทัดเครื่องพิมพ์ (CALL LPRINT, 0 = 80)
+PR_COUNT       equ $FD6A-SLTWRK_OLD  ; 9.36: จำนวนตัว "แถวกลาง" ในบรรทัดที่พักไว้
+PR_LEN         equ $FD6B-SLTWRK_OLD  ; 9.36: จำนวนไบต์ใน PR_BUF
+PR_ESC         equ $FD6C-SLTWRK_OLD  ; 9.36: อยู่ใน ESC sequence -- ส่งตรง
+PR_BUSY        equ $FD6D-SLTWRK_OLD  ; 9.36: กำลังส่งเอง (LPTOUT ซ้อน) -- hook ปล่อยผ่าน
+PREV_LPTO      equ $FD6E-SLTWRK_OLD  ; 9.36: 5 ไบต์ ($FD6E-$FD72) hook H.LPTO เดิม
+PR_CELL        equ $FD73-SLTWRK_OLD  ; 9.36: scratch ของ PR_FLUSH (ช่องปัจจุบัน)
+PR_BUF         equ $FD74-SLTWRK_OLD  ; 9.36: PR_BUF_SIZE ไบต์ -- ตัวอักษรของบรรทัดตามลำดับที่ส่งมา
+PR_BUF_SIZE    equ 128
 PREV_GRPO      equ $FD64-SLTWRK_OLD  ; 9.33: 5 ไบต์ ($FD64-$FD68) hook H.FEC6 เดิม -- ต้องส่งต่อเสมอ (disk BASIC)
 SF_KIND        equ $FD5D-SLTWRK_OLD  ; 9.30: ชนิดของ ANSTR/TNSTR/MLSTR ที่กำลังทำ
 BOOT_SKIP      equ $FD5C-SLTWRK_OLD  ; 9.30: CODE ค้างตอน INIT -> ไม่เปิดระบบไทยตอนบูต
@@ -334,6 +343,7 @@ BAS_STRCPY  equ $6611   ; คัดลอกสตริง (HL -> descriptor) �
 BAS_FRESTR  equ $67D3   ; ปล่อยสตริงชั่วคราวใน DAC -> HL = descriptor
 BAS_SNERR   equ $4055   ; "Syntax error"
 BAS_TMERR   equ $406D   ; "Type mismatch"
+BAS_FCERR   equ $475A   ; "Illegal function call" (ต้นฉบับ $43AB ใช้จุดเดียวกัน)
 VALTYP      equ $F663   ; ชนิดของค่า (3 = สตริง)
 
 BCALL MACRO addr
@@ -354,3 +364,9 @@ GRPACX      equ $FCB7
 GRPACY      equ $FCB9
 FORCLR      equ $F3E9
 BAKCLR      equ $F3EA
+
+; ---- 9.36: เครื่องพิมพ์ ----
+H_LPTO      equ $FFB6   ; hook ต้น LPTOUT ($085D: CALL H.LPTO แล้วส่ง A ออกพอร์ตเครื่องพิมพ์)
+LPTOUT      equ $00A5   ; BIOS: ส่ง A ไปเครื่องพิมพ์ (carry = ยกเลิกด้วย CTRL+STOP)
+LPTSTT      equ $00A8   ; BIOS: สถานะเครื่องพิมพ์ (A=0, Z = ไม่พร้อม)
+RAWPRT      equ $F418   ; ไม่เป็น 0 = BASIC ส่งตัวอักษรไปเครื่องพิมพ์ตรง ๆ ไม่แปลง

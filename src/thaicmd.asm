@@ -35,7 +35,7 @@ CMDTAB:
 	db "SYSTEM",0
 	dw CMD_SYSTEM
 	db "LPRINT",0
-	dw CMD_STUB
+	dw CMD_LPRINT
 	db "ANSTR",0
 	dw CMD_ANSTR
 	db "TNSTR",0
@@ -140,6 +140,8 @@ THAION_CORE:
 	ei
 .thaion_nofont:
 	call SET_CGPNT                ; 9.33: ให้ BIOS ใช้ฟอนต์ไทยของเราเอง (SCREEN ใหม่/กราฟิก)
+	ld a,$FF                      ; 9.36: BASIC ส่งรหัสไทยไปเครื่องพิมพ์ตรง ๆ (ต้นฉบับตั้ง RAWPRT=$50 เช่นกัน)
+	ld (RAWPRT),a
 	; เปิดใช้งานอีกครั้งด้วยกลไกใหม่ (RST 30H / CALLF แทน trampoline เดิม -- ดู comment เต็มที่
 	; KEYC_INSTALL ใน src/keyboard.asm) หลังปิดไปชั่วคราวตอนบั๊กข้อ 8 ยังไม่จบ
 	; *** 9.19: กันติดตั้งซ้ำ -- ROM นี้สั่ง CALL THAION เองตอนบูตอยู่แล้ว ถ้าผู้ใช้สั่ง THAION ซ้ำ
@@ -182,6 +184,8 @@ CMD_THAIOFF:
 	call KEYC_UNINSTALL
 	call PRINTHOOK_UNINSTALL
 	call RESTORE_CGPNT            ; 9.33
+	xor a                         ; 9.36
+	ld (RAWPRT),a
 	call LOAD_SYSFONT             ; 9.35: คืนฟอนต์อังกฤษบนจอ (ไม่ล้างจอ)
 	pop hl
 	jp STMT_DONE
@@ -408,6 +412,8 @@ SF_SNERR:
 	BCALL BAS_SNERR               ; "Syntax error" (ไม่กลับมา -- BASIC ตั้ง stack ใหม่เอง)
 SF_TMERR:
 	BCALL BAS_TMERR               ; "Type mismatch"
+SF_FCERR:
+	BCALL BAS_FCERR               ; "Illegal function call"
 
 ; --- stub สำหรับคำสั่งที่ยังไม่ implement (Phase 4) ------------------------
 CMD_STUB:

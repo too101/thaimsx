@@ -20,6 +20,7 @@
 	include "src/thaicmd.asm"
 	include "src/keyboard.asm"
 	include "src/printon.asm"
+	include "src/printer.asm"
 	include "src/font_data.asm"
 	include "src/kbtables_data.asm"
 	include "src/kwtables_data.asm"

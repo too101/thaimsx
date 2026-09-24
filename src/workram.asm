@@ -388,3 +388,19 @@ GRPO_HOOK:
 	pop af
 	ex (sp),hl
 	ret
+
+; LPTO_HOOK (9.36): H.LPTO -- ทำงานแล้วส่งต่อ hook เดิม (บล็อก+PREV_LPTO) ด้วย A ที่อาจเปลี่ยนแล้ว แบบ TIMI_HOOK
+LPTO_HOOK:
+	push ix
+	call GET_IX
+	call LPTO_BODY
+	ex (sp),ix
+	ex (sp),hl
+	push af
+	push de
+	ld de,0+PREV_LPTO
+	add hl,de
+	pop de
+	pop af
+	ex (sp),hl
+	ret

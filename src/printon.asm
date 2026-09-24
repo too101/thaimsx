@@ -126,6 +126,11 @@ PRINTHOOK_INSTALL:
 	call IX_DE
 	ld bc,GRPO_HOOK
 	call HOOK_INSTALL
+	ld hl,H_LPTO                  ; 9.36: เครื่องพิมพ์ 3 ระดับตอน PRINTON (ส่งต่อ hook เดิมเสมอ)
+	ld de,PREV_LPTO
+	call IX_DE
+	ld bc,LPTO_HOOK
+	call HOOK_INSTALL
 	ei
 	ret
 
@@ -175,6 +180,11 @@ PRINTHOOK_UNINSTALL:
 	ld hl,PREV_GRPO               ; 9.33
 	call IX_HL
 	ld de,H_GRPO
+	ld bc,5
+	ldir
+	ld hl,PREV_LPTO               ; 9.36
+	call IX_HL
+	ld de,H_LPTO
 	ld bc,5
 	ldir
 	xor a
