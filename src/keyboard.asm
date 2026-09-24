@@ -475,21 +475,23 @@ KEYC_BODY:
 	inc b
 	jr .kw_next
 .kw_skip:
-	ld a,(hl)
+	bit 7,(hl)
 	inc hl
-	or a
-	jr nz,.kw_skip
+	jr z,.kw_skip
 .kw_next:
 	djnz .kw_skip
 .kw_push:
 	ld a,(hl)
-	or a
-	jp z,.push_after
+	push af
+	and $7F
 	push hl
 	call QUEUE_PUSH_CHAR
 	pop hl
 	inc hl
-	jr .kw_push
+	pop af
+	rlca
+	jr nc,.kw_push
+	jp .push_after
 .no_kw:
 	ld a,(ix+INPUT_MODE)
 	or a
@@ -663,51 +665,94 @@ GET_MY_SLOT:
 ; [addr_hi][$C9=RET] -- ลำดับการเขียนยังคงหลักการเดิม (ตอนติดตั้ง เขียนไบต์ที่ไม่ใช่ opcode แรกก่อน,
 ; เขียน $F7 ทีหลังสุด / ตอนถอด คืน opcode แรกเดิมก่อน) เพื่อความปลอดภัยถ้ามี interrupt แทรกกลางคัน
 
-KEYC_INSTALL:
+KEYC_INSTALL:                  ; 9.40: ติดตั้ง hook ทุกตัวจากตาราง HOOK_TABLE (เดิมเขียนแยกทีละตัว)
 	di
 	call GET_MY_SLOT
 	ld (ix+MY_SLOT_ID),a
-	ld a,(H_KEYC)              ; สำรองเนื้อ hook slot เดิมทั้ง 5 ไบต์ไว้ก่อนเสมอ
-	ld (ix+PREV_KEYC),a
-	ld a,(H_KEYC+1)
-	ld (ix+PREV_KEYC+1),a
-	ld a,(H_KEYC+2)
-	ld (ix+PREV_KEYC+2),a
-	ld a,(H_KEYC+3)
-	ld (ix+PREV_KEYC+3),a
-	ld a,(H_KEYC+4)
-	ld (ix+PREV_KEYC+4),a
-	ld a,(ix+MY_SLOT_ID)
-	ld (H_KEYC+1),a            ; เขียน slot byte ก่อน
-	ld hl,KEYC_HOOK_REAL
-	ld (H_KEYC+2),hl           ; addr_lo/addr_hi (16-bit store เดียว -- L->+2, H->+3)
-	ld a,$C9                   ; RET -- จุดลงจอดตอน CALLF กลับมา (ดู comment ด้านบน)
-	ld (H_KEYC+4),a
-	ld a,RST30_OPCODE          ; เขียน opcode ($F7=RST 30H) ทีหลังสุด -- ก้าวสุดท้ายที่ทำให้ hook
-	ld (H_KEYC),a              ; ทำงานจริง
+	ld hl,HOOK_TABLE
+.hi_loop:
+	ld e,(hl)
+	inc hl
+	ld d,(hl)                     ; DE = hook
+	inc hl
+	ld a,d
+	or e
+	jr z,.hi_done
+	push de
+	ld e,(hl)                     ; offset ที่สำรอง hook เดิมในบล็อก
+	inc hl
+	ld d,0
+	call IX_DE                    ; DE = address สำรอง
+	ld c,(hl)
+	inc hl
+	ld b,(hl)                     ; BC = จุดเข้าของเรา
+	inc hl
+	ex (sp),hl                    ; HL = hook, (sp) = ตาราง
+	call HOOK_INSTALL
+	pop hl
+	jr .hi_loop
+.hi_done:
 	ei
 	ret
 
-KEYC_UNINSTALL:
+KEYC_UNINSTALL:                ; 9.40: คืน hook เดิมทุกตัว
 	di
-	ld a,(ix+PREV_KEYC)
-	ld (H_KEYC),a              ; คืน opcode เดิมก่อน (ปลอดภัยทันทีไม่ว่าไบต์ที่เหลือจะยังไม่ทันคืน)
-	ld a,(ix+PREV_KEYC+1)
-	ld (H_KEYC+1),a
-	ld a,(ix+PREV_KEYC+2)
-	ld (H_KEYC+2),a
-	ld a,(ix+PREV_KEYC+3)
-	ld (H_KEYC+3),a
-	ld a,(ix+PREV_KEYC+4)
-	ld (H_KEYC+4),a
-	ei
-	ret
+	ld hl,HOOK_TABLE
+.hu_loop:
+	ld e,(hl)
+	inc hl
+	ld d,(hl)                     ; DE = hook
+	inc hl
+	ld a,d
+	or e
+	jr z,.hi_done
+	ld a,(hl)
+	inc hl
+	inc hl
+	inc hl
+	push hl
+	ld l,a
+	ld h,0
+	call IX_HL                    ; HL = ที่สำรอง
+	ld bc,5
+	ldir
+	pop hl
+	jr .hu_loop
 
-; ---- QUEUE_PUSH_CHAR -- ดัน A เข้าคิวคีย์บอร์ดของ BIOS (ดูหัวข้อ 5.4) --------------------
-; เลียนแบบ routine push คิวเดิมที่ 0x4E25-0x4E33 ของต้นฉบับตรง ๆ (ตัดเสียง click ออก)
-; input: A = ตัวอักษร/font code ที่จะพิมพ์
-; clobbers: AF, HL, BC -- ปลอดภัยเสมอ เพราะผู้เรียก (KEYC_HOOK) คืนค่า HL ของ caller เองทีหลัง
-;           จาก stack อยู่แล้ว (ดู .lookup: pop hl หลัง call นี้)
+; HOOK_TABLE: (hook, offset ที่สำรอง hook เดิมในบล็อก, จุดเข้าของเรา) -- จบด้วย 0
+HOOK_TABLE:
+	dw H_KEYC
+	db PREV_KEYC
+	dw KEYC_HOOK_REAL
+	dw H_CHPUT
+	db PREV_CHPUT
+	dw PRINTHOOK
+	dw H_CHGE
+	db PREV_CHGE
+	dw CHGE_HOOK
+	dw H_PINL
+	db PREV_PINL
+	dw INLIN_HOOK
+	dw H_INLI
+	db PREV_INLI
+	dw INLIN_HOOK
+	dw H_DSPC
+	db PREV_DSPC
+	dw DSPC_HOOK
+	dw H_ERAC
+	db PREV_ERAC
+	dw ERAC_HOOK
+	dw H_TIMI
+	db PREV_TIMI
+	dw TIMI_HOOK
+	dw H_GRPO
+	db PREV_GRPO
+	dw GRPO_HOOK
+	dw H_LPTO
+	db PREV_LPTO
+	dw LPTO_HOOK
+	dw 0
+
 QUEUE_PUSH_CHAR:
 	ld hl,(KEYQ_TAIL)
 	ld (hl),a

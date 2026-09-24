@@ -7,9 +7,9 @@ pasmo src/main.asm build/thairom_raw.bin build/thairom.sym
 python3 - <<'PYEOF'
 data = open('build/thairom_raw.bin','rb').read()
 print(f"assembled size: {len(data)} bytes")
-target = 16384
+target = 8192
 if len(data) > target:
-    raise SystemExit(f"ERROR: ROM too big for 16KB ({len(data)} bytes)")
+    raise SystemExit(f"ERROR: ROM too big for 8KB ({len(data)} bytes)")
 padded = data + b'\xff' * (target - len(data))
 with open('build/thairom.rom','wb') as f:
     f.write(padded)

@@ -409,13 +409,13 @@ SKIPSP:
 	jr SKIPSP
 
 SF_SNERR:
-	BCALL BAS_SNERR               ; "Syntax error" (ไม่กลับมา -- BASIC ตั้ง stack ใหม่เอง)
+	ld ix,BAS_SNERR                ; ข้อผิดพลาดของ BASIC ไม่กลับมา (ตั้ง stack ใหม่เอง)
+	jp CALBAS
 SF_TMERR:
-	BCALL BAS_TMERR               ; "Type mismatch"
+	ld ix,BAS_TMERR                ; ข้อผิดพลาดของ BASIC ไม่กลับมา (ตั้ง stack ใหม่เอง)
+	jp CALBAS
 SF_FCERR:
-	BCALL BAS_FCERR               ; "Illegal function call"
+	ld ix,BAS_FCERR                ; ข้อผิดพลาดของ BASIC ไม่กลับมา (ตั้ง stack ใหม่เอง)
+	jp CALBAS
 
-; --- stub สำหรับคำสั่งที่ยังไม่ implement (Phase 4) ------------------------
-CMD_STUB:
-	pop hl
-	jp STMT_DONE
+

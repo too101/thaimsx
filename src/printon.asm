@@ -62,142 +62,20 @@
 ; ชุดสำหรับ PRINTON/PRINTOFF (ซึ่งสลับบ่อยกว่า THAION/THAIOFF มาก และ toggle
 ; แค่ flag เฉย ๆ ก็พอ ไม่จำเป็นต้องติดตั้ง/ถอด hook จริงทุกครั้ง)
 PRINTHOOK_INSTALL:
-	di
-	xor a
-	ld (ix+PRINT_REDIRECT),a      ; เริ่มต้นสภาวะ clean เสมอ (กัน state ค้างจาก THAION รอบก่อน)
-	ld a,(H_CHPUT)
-	ld (ix+PREV_CHPUT),a
-	ld a,(H_CHPUT+1)
-	ld (ix+PREV_CHPUT+1),a
-	ld a,(H_CHPUT+2)
-	ld (ix+PREV_CHPUT+2),a
-	ld a,(H_CHPUT+3)
-	ld (ix+PREV_CHPUT+3),a
-	ld a,(H_CHPUT+4)
-	ld (ix+PREV_CHPUT+4),a
-	ld a,(ix+MY_SLOT_ID)          ; คำนวณไว้แล้วโดย KEYC_INSTALL ที่เรียกก่อนหน้านี้เสมอ
-	ld (H_CHPUT+1),a
-	ld hl,PRINTHOOK
-	ld (H_CHPUT+2),hl
-	ld a,$C9                   ; RET
-	ld (H_CHPUT+4),a
-	ld a,RST30_OPCODE
-	ld (H_CHPUT),a
-	; --- 9.19: hook เพิ่ม 3 ตัว (ดู INLIN_REBUILD / CHGE_HOOK ด้านล่าง) ---
-	xor a
+	xor a                         ; เริ่มต้นสภาวะ clean เสมอ (กัน state ค้างจาก THAION รอบก่อน) -- hook ทุกตัว
+	ld (ix+PRINT_REDIRECT),a      ; ติดตั้งรวมที่ HOOKS_INSTALL (keyboard.asm) แล้ว (9.40)
 	ld (ix+INLIN_ACTIVE),a
-	ld hl,H_CHGE
-	ld de,PREV_CHGE
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,CHGE_HOOK
-	call HOOK_INSTALL
-	ld hl,H_PINL
-	ld de,PREV_PINL
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,INLIN_HOOK
-	call HOOK_INSTALL
-	ld hl,H_INLI
-	ld de,PREV_INLI
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,INLIN_HOOK
-	call HOOK_INSTALL
-	; --- 9.21: cursor แยกสถานะไทย/อังกฤษ ---
-	xor a
 	ld (ix+IN_CHGET),a
 	ld (ix+CUR_WAITING),a
 	ld (ix+BLINK_OFF),a
-	ld hl,H_DSPC
-	ld de,PREV_DSPC
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,DSPC_HOOK
-	call HOOK_INSTALL
-	ld hl,H_ERAC
-	ld de,PREV_ERAC
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,ERAC_HOOK
-	call HOOK_INSTALL
-	ld hl,H_TIMI                  ; 9.26: กระพริบ cursor ภาษาไทย (ส่งต่อ hook เดิมเสมอ)
-	ld de,PREV_TIMI
-	call IX_DE                  ; 9.27: offset -> address จริงในบล็อก
-	ld bc,TIMI_HOOK
-	call HOOK_INSTALL
-	ld hl,H_GRPO                  ; 9.33: ภาษาไทย 3 ระดับบนจอกราฟิก (ส่งต่อ hook เดิมเสมอ)
-	ld de,PREV_GRPO
-	call IX_DE
-	ld bc,GRPO_HOOK
-	call HOOK_INSTALL
-	ld hl,H_LPTO                  ; 9.36: เครื่องพิมพ์ 3 ระดับตอน PRINTON (ส่งต่อ hook เดิมเสมอ)
-	ld de,PREV_LPTO
-	call IX_DE
-	ld bc,LPTO_HOOK
-	call HOOK_INSTALL
-	ei
 	ret
 
 PRINTHOOK_UNINSTALL:
-	di
-	ld a,(ix+PREV_CHPUT)
-	ld (H_CHPUT),a
-	ld a,(ix+PREV_CHPUT+1)
-	ld (H_CHPUT+1),a
-	ld a,(ix+PREV_CHPUT+2)
-	ld (H_CHPUT+2),a
-	ld a,(ix+PREV_CHPUT+3)
-	ld (H_CHPUT+3),a
-	ld a,(ix+PREV_CHPUT+4)
-	ld (H_CHPUT+4),a
-	; --- 9.19: คืน hook 3 ตัวที่ติดตั้งเพิ่ม (ldir คืนไบต์ opcode ตัวแรกก่อนเสมอ ตามกติกาเดิม) ---
-	ld hl,PREV_CHGE
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_CHGE
-	ld bc,5
-	ldir
-	ld hl,PREV_PINL
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_PINL
-	ld bc,5
-	ldir
-	ld hl,PREV_INLI
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_INLI
-	ld bc,5
-	ldir
-	ld hl,PREV_DSPC
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_DSPC
-	ld bc,5
-	ldir
-	ld hl,PREV_ERAC
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_ERAC
-	ld bc,5
-	ldir
-	ld hl,PREV_TIMI
-	call IX_HL                  ; 9.27: offset -> address จริงในบล็อก
-	ld de,H_TIMI
-	ld bc,5
-	ldir
-	ld hl,PREV_GRPO               ; 9.33
-	call IX_HL
-	ld de,H_GRPO
-	ld bc,5
-	ldir
-	ld hl,PREV_LPTO               ; 9.36
-	call IX_HL
-	ld de,H_LPTO
-	ld bc,5
-	ldir
 	xor a
 	ld (ix+INLIN_ACTIVE),a
 	ld (ix+CUR_WAITING),a
-	ei
 	ret
 
-; ---- HOOK_INSTALL (9.19) ------------------------------------------------------
-; รูปแบบเดียวกับ PRINTHOOK_INSTALL ด้านบนทุกประการ แค่ทำเป็น routine กลาง
-; entry: HL = hook slot (5 ไบต์), DE = ที่สำรองเนื้อ hook เดิม (5 ไบต์), BC = handler
-; ผู้เรียกต้อง DI ไว้แล้ว -- เขียนไบต์ opcode (RST 30H) เป็นไบต์สุดท้าย ให้ทุกจังหวะที่ hook
-; อาจถูกเรียกระหว่างเขียนยังเป็นโค้ดที่ปลอดภัยเสมอ (กติกาเดียวกับ KEYC_INSTALL)
 HOOK_INSTALL:
 	push hl
 	push bc
@@ -246,7 +124,6 @@ CHGE_BODY:
 	push af
 	ld a,TRUE
 	ld (ix+IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
-	;call FONT_CHECK               ; 9.23: SCREEN/WIDTH โหลดฟอนต์ระบบทับ -> ใส่ฟอนต์ไทยคืน
 	ld a,(ix+PRINT_MODE)
 	or a
 	jr z,.chge_done
@@ -320,7 +197,6 @@ PRINTHOOK_BODY:
 	pop af
 	push af
 	cp $80
-	;call nc,FONT_CHECK            ; 9.23: จะพิมพ์อักษรไทย -- เช็คว่าฟอนต์ไทยยังอยู่ใน VRAM
 	ld a,(ix+PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
@@ -349,29 +225,6 @@ PRINTHOOK_BODY:
 	ld c,a
 	jr .after_resync
 
-	; --- ขั้น 1: sync CSRY แถวจริง (คืนค่าจากรอบก่อนถ้าเคยยักย้ายไว้) ---
-	ld a,(ix+PRINT_REDIRECT)             ; (โค้ดเดิม -- ข้ามแล้ว ดู PRINT_RESYNC)
-	or a
-	jr z,.refresh_shadow
-	ld a,(ix+PRINT_ROW)
-	ld (CSRY),a
-	xor a
-	ld (ix+PRINT_REDIRECT),a
-	jr .classify
-.refresh_shadow:
-	; รอบก่อนเป็นตัวอักษรปกติ (ไม่ได้ยักย้าย) -- CSRY ตอนนี้ถูกต้องอยู่แล้ว รีเฟรช
-	; เงาไว้เผื่อรอบนี้ต้องยักย้าย
-	ld a,(CSRY)
-	ld (ix+PRINT_ROW),a
-
-.classify:
-	; --- ขั้น 1.6 (ใหม่): แก้ VRAM ค้างจากการ "ผสม" สระบน+วรรณยุกต์ของรอบก่อน (ถ้ามี) ---
-	; ดู comment เต็มที่ PRINT_COMBINE_PENDING ใน equates.asm: hook ไม่มีทางแทนที่ตัวอักษรที่
-	; BIOS กำลังจะวาดได้เลย (แค่ยักย้ายตำแหน่งได้) จึงปล่อยให้ BIOS วาดวรรณยุกต์ตัวเปล่าทับ
-	; ตำแหน่งสระบนไปก่อน (ผิดชั่วคราว 1 จังหวะ) แล้วมาแก้ทับด้วย WRTVRM ตรงนี้ตอนเรียกครั้งถัดไป
-	; ก่อนประมวลผลตัวอักษรใหม่ใด ๆ เลย -- ไม่แตะ D/E เพราะยังไม่ถูกใช้งานตอนนี้ (กำหนดใหม่ทุกครั้ง
-	; ที่ขั้น 3/5 ด้านล่าง) จึงปลอดภัยที่จะใช้เป็น scratch ตรงนี้ได้อิสระ
-	call COMBINE_FIX                  ; (9.19: แยกเป็น routine ให้ CHGE_HOOK ใช้ร่วม -- BC คงเดิม)
 .after_resync:
 	; --- 9.20: BS/DEL ของตัวแก้ไขบรรทัดขณะ PRINTON (KEYC_HOOK ส่งมาเป็นโค้ดส่วนตัว) ---
 	ld a,c
@@ -1898,36 +1751,6 @@ CUR_BUILD:
 	ld sp,hl
 	ret
 
-; ---- FONT_CHECK (9.23) ----------------------------------------------------------
-; SCREEN / WIDTH ของ BASIC เรียก INITXT/INIT32 ซึ่งโหลดฟอนต์ระบบลง VRAM ทับฟอนต์ไทย (เช่น
-; SCREEN 0:WIDTH 80 บน MSX2) -- เช็ค 2 ไบต์ของ glyph ก ($A1) ใน pattern table ปัจจุบัน ถ้าไม่ใช่ของเรา
-; โหลดฟอนต์ไทยใหม่ทั้งชุด -- เฉพาะโหมดข้อความ (SCREEN 0/1) และตอน THAION -- ทำลาย AF/BC/DE/HL
-FONT_CHECK:
-	ld a,(ix+THAI_MODE)
-	or a
-	ret z
-	ld a,(SCRMOD)
-	cp 2
-	ret nc
-	ld hl,(CGPNT)
-	ld de,$A1*8+1
-	add hl,de
-	call RDVRM
-	ld b,a
-	ld a,(FONT_THAI+$A1*8+1)
-	cp b
-	jr nz,.fc_reload
-	inc hl
-	call RDVRM
-	ld b,a
-	ld a,(FONT_THAI+$A1*8+2)
-	cp b
-	ret z
-.fc_reload:
-	ld hl,FONT_THAI
-	ld de,(CGPNT)
-	ld bc,FONT_THAI_END-FONT_THAI
-	jp LDIRVM
 
 ; ==========================================================================
 ; ---- 9.25: บรรทัดยาวต่อแถว (continuation) ขณะ PRINTON ----
