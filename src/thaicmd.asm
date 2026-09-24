@@ -168,6 +168,8 @@ CMD_THAIOFF:
 	pop hl
 	push hl
 	xor a
+	call SET_INPUT_MODE           ; 9.35: ดับไฟ/cursor โหมดไทยด้วย (แป้นกลับเป็นอังกฤษ)
+	xor a
 	ld (ix+THAI_MODE),a
 	ld (ix+PRINT_MODE),a
 	ld (ix+INPUT_MODE),a
@@ -180,8 +182,42 @@ CMD_THAIOFF:
 	call KEYC_UNINSTALL
 	call PRINTHOOK_UNINSTALL
 	call RESTORE_CGPNT            ; 9.33
+	call LOAD_SYSFONT             ; 9.35: คืนฟอนต์อังกฤษบนจอ (ไม่ล้างจอ)
 	pop hl
 	jp STMT_DONE
+
+; LOAD_SYSFONT (9.35): คัดลอกฟอนต์ของเครื่อง (CGPNT ที่คืนแล้ว) ลง pattern table ของจอข้อความ ทีละไบต์ผ่าน
+; RDSLT/WRTVRM -- ไม่เรียก INITXT จึงไม่ล้างจอ (ผู้ใช้ขอให้ THAIOFF กลับเป็นอังกฤษ; เดิมไม่คืนฟอนต์เลย ตัวรหัส
+; $80-$FF บนจอจึงยังเป็นอักษรไทย) -- โหมดกราฟิกไม่ทำ (pattern table คือภาพ) -- ทำลาย AF, BC, DE, HL
+LOAD_SYSFONT:
+	ld a,(SCRMOD)
+	cp 2
+	ret nc
+	ld hl,(FONTADR)               ; ต้นทาง (ใน slot FONTSLT)
+	ld de,(CGPNT)                 ; ปลายทาง VRAM
+	ld bc,2048
+.ls_loop:
+	push bc
+	push de
+	push hl
+	ld a,(FONTSLT)
+	call RDSLT                    ; A = ไบต์ฟอนต์ (ทำลาย BC/DE, ปิด interrupt)
+	pop hl
+	pop de
+	push hl
+	ex de,hl
+	call WRTVRM                   ; (HL) = A
+	ex de,hl
+	pop hl
+	pop bc
+	inc hl
+	inc de
+	dec bc
+	ld a,b
+	or c
+	jr nz,.ls_loop
+	ei
+	ret
 
 ; SET_CGPNT (9.33): CGPNT = ฟอนต์ไทยใน ROM นี้ (ต้นฉบับ $4076 ทำแบบเดียวกัน) -- สำรองค่าเดิมไว้ก่อน (ถ้ายังไม่ใช่
 ; ของเรา) เพื่อคืนตอน THAIOFF -- ทำลาย AF, HL (คง BC)
