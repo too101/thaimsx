@@ -246,7 +246,7 @@ CHGE_BODY:
 	push af
 	ld a,TRUE
 	ld (ix+IN_CHGET),a               ; 9.21: cursor ที่จะวาดถัดไปคือ cursor รอคีย์ของ CHGET
-	call FONT_CHECK               ; 9.23: SCREEN/WIDTH โหลดฟอนต์ระบบทับ -> ใส่ฟอนต์ไทยคืน
+	;call FONT_CHECK               ; 9.23: SCREEN/WIDTH โหลดฟอนต์ระบบทับ -> ใส่ฟอนต์ไทยคืน
 	ld a,(ix+PRINT_MODE)
 	or a
 	jr z,.chge_done
@@ -320,7 +320,7 @@ PRINTHOOK_BODY:
 	pop af
 	push af
 	cp $80
-	call nc,FONT_CHECK            ; 9.23: จะพิมพ์อักษรไทย -- เช็คว่าฟอนต์ไทยยังอยู่ใน VRAM
+	;call nc,FONT_CHECK            ; 9.23: จะพิมพ์อักษรไทย -- เช็คว่าฟอนต์ไทยยังอยู่ใน VRAM
 	ld a,(ix+PRINT_IN_LF)            ; 9.20: CHPUT(LF) ที่เราเรียกซ้อนเองตอน scroll -- ปล่อยผ่าน
 	or a
 	jp nz,.done
@@ -453,18 +453,8 @@ PRINTHOOK_BODY:
 	jr c,.lf_simple
 	sub b
 	ld b,a                        ; B = จำนวนแถวที่ต้อง scroll
-	call GET_BOTTOM
-	ld (CSRY),a
-	ld a,TRUE
-	ld (ix+PRINT_IN_LF),a
-.lf_scroll:
-	push bc
-	ld a,10
-	call CHPUT_IX
-	pop bc
-	djnz .lf_scroll
-	xor a
-	ld (ix+PRINT_IN_LF),a
+	ld a,b
+	call SCROLL_N                 ; 9.39: เลื่อนจอทีเดียว B แถว (เดิม CHPUT(LF) ซ้อน B ครั้ง)
 	call GET_BOTTOM
 	sub 2
 	ld (CSRY),a
@@ -799,6 +789,14 @@ PRINTHOOK_BODY:
 ; entry: A = รหัสตัวอักษร
 ; exit:  A = 0 (ตัวอักษรปกติ), 1 (สระบน), 2 (วรรณยุกต์), 3 (สระล่าง) -- ไม่ทำลาย register อื่น
 CLASSIFY_THAI_MARK:
+	cp $D1                        ; 9.39: เครื่องหมายทุกตัวอยู่ในช่วง $D1-$ED -- ตัวอื่นตอบ 0 ทันที
+	jr c,.cls_fast
+	cp $EE
+	jr c,.cls_slow
+.cls_fast:
+	xor a
+	ret
+.cls_slow:
 	push hl
 	push bc
 	ld c,a
@@ -2012,18 +2010,8 @@ LINK_NEXT:
 	push bc
 	ld a,(CSRY)
 	push af
-	call GET_BOTTOM
-	ld (CSRY),a
-	ld a,TRUE
-	ld (ix+PRINT_IN_LF),a
-.ln_scroll:
-	push bc
-	ld a,10
-	call CHPUT_IX
-	pop bc
-	djnz .ln_scroll
-	xor a
-	ld (ix+PRINT_IN_LF),a
+	ld a,b
+	call SCROLL_N                 ; 9.39: เลื่อนจอทีเดียว B แถว
 	pop af                        ; CSRY เดิม
 	pop bc                        ; B = จำนวนที่ scroll, C = r เดิม
 	sub b
@@ -2339,3 +2327,158 @@ GR_DRAW:
 	pop de
 	pop hl
 	ret
+
+; SCROLL_N (9.39): เลื่อนจอข้อความขึ้น A แถว (แถว 1..ล่างสุด ไม่แตะแถว function key) ผลเหมือน CHPUT(LF) ที่แถว
+; ล่างสุด A ครั้ง (BIOS "ลบแถว 1" $0A85: เลื่อน LINTTB, FSTPOS แถว -1, คัดลอกแถวทีละแถว, แถวใหม่ LINTTB=$AF
+; และเติมช่องว่าง) แต่ทำครั้งเดียว -- PRINTON ขึ้นบรรทัดทีละ 3 แถว เดิมทำให้ BIOS เลื่อนทั้งจอ 3 รอบ (~70% ของเวลา
+; พิมพ์ตอน PRINTON) -- คัดลอกทีละแถวผ่าน buffer บน stack (LINLEN ไบต์) -- ทำลาย AF,BC,DE,HL (คง IX)
+SCROLL_N:
+	ld c,a                        ; C = n
+	call GET_BOTTOM
+	ld b,a                        ; B = แถวล่างสุด
+	sub c
+	ret c
+	ret z
+	push bc
+	; LINTTB[1..B-n] = LINTTB[1+n..B]
+	ld hl,LINTTB
+	ld e,c
+	ld d,0
+	add hl,de
+	ld de,LINTTB
+	push bc
+	ld c,a
+	ld b,0
+	ldir
+	pop bc
+	; FSTPOS แถว -= n (BIOS ลดทีละ 1 ทุกครั้งที่เลื่อน)
+	ld a,(FSTPOS)
+	sub c
+	ld (FSTPOS),a
+	; แถวใหม่ท้ายจอ: LINTTB = $AF
+	ld a,b
+	sub c
+	ld e,a
+	ld d,0
+	ld hl,LINTTB
+	add hl,de                     ; LINTTB-1 + (B-n+1)
+	ld b,c
+.sn_lt:
+	ld (hl),$AF
+	inc hl
+	djnz .sn_lt
+	; address แถว 1 และระยะห่างแถว (ใช้สูตรเดียวกับ BIOS ผ่าน NAMETAB_ADDR ครั้งเดียว)
+	ld a,2
+	ld e,1
+	call NAMETAB_ADDR
+	push hl
+	ld a,1
+	ld e,1
+	call NAMETAB_ADDR             ; HL = แถว 1
+	pop de
+	ex de,hl
+	or a
+	sbc hl,de                     ; HL = ระยะห่างแถว
+	ex de,hl                      ; DE = ระยะห่าง, HL = แถว 1 (ปลายทาง)
+	pop bc                        ; C = n, B = ล่างสุด
+	push bc
+	push hl                       ; ปลายทาง
+	push de                       ; ระยะห่าง
+	ld a,c
+	ld b,a                        ; ต้นทาง = ปลายทาง + n*ระยะห่าง
+.sn_src:
+	add hl,de
+	djnz .sn_src
+	; stack: [ระยะห่าง][ปลายทาง][n/ล่างสุด] -- buffer 80 ไบต์ใต้นั้น
+	ex de,hl                      ; DE = ต้นทาง
+	ld hl,-80
+	add hl,sp
+	ld sp,hl
+	; จำนวนแถวที่คัดลอก = ล่างสุด - n
+	ld hl,84
+	add hl,sp
+	ld a,(hl)                     ; C = n
+	inc hl
+	sub (hl)
+	neg                           ; A = ล่างสุด - n
+.sn_row:
+	push af
+	push de                       ; ต้นทาง
+	ex de,hl                      ; HL = VRAM ต้นทาง
+	ld de,4
+	ex de,hl
+	add hl,sp
+	ex de,hl                      ; DE = buffer (sp+4)
+	ld a,(LINLEN)
+	ld c,a
+	ld b,0
+	call LDIRMV
+	ld hl,86                      ; ปลายทาง อยู่ที่ sp+4+80+2
+	add hl,sp
+	ld e,(hl)
+	inc hl
+	ld d,(hl)                     ; DE = VRAM ปลายทาง
+	ld hl,4
+	add hl,sp                     ; HL = buffer
+	ld a,(LINLEN)
+	ld c,a
+	ld b,0
+	call LDIRVM
+	; ปลายทาง += ระยะห่าง, ต้นทาง += ระยะห่าง
+	ld hl,84                      ; ระยะห่าง sp+84, ปลายทาง sp+86
+	add hl,sp
+	ld c,(hl)
+	inc hl
+	ld b,(hl)                     ; BC = ระยะห่าง
+	inc hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)
+	ex de,hl
+	add hl,bc
+	ex de,hl
+	ld (hl),d
+	dec hl
+	ld (hl),e                     ; ปลายทาง += ระยะห่าง
+	pop hl                        ; ต้นทาง
+	add hl,bc
+	ex de,hl                      ; DE = ต้นทางใหม่
+	pop af
+	dec a
+	jr nz,.sn_row
+	; ล้าง n แถวท้าย เริ่มที่ปลายทางปัจจุบัน
+	ld hl,84
+	add hl,sp
+	ld a,(hl)                     ; n
+	ld hl,80                      ; ระยะห่าง sp+80, ปลายทาง sp+82
+	add hl,sp
+	ld c,(hl)
+	inc hl
+	ld b,(hl)                     ; BC = ระยะห่าง
+	inc hl
+	ld e,(hl)
+	inc hl
+	ld d,(hl)                     ; DE = ปลายทาง
+.sn_clr:
+	push af
+	push bc
+	push de
+	ex de,hl
+	ld a,(LINLEN)
+	ld c,a
+	ld b,0
+	ld a,' '
+	call FILVRM
+	pop hl
+	pop bc
+	add hl,bc
+	ex de,hl
+	pop af
+	dec a
+	jr nz,.sn_clr
+	ld hl,80+4
+	add hl,sp
+	ld sp,hl
+	pop bc
+	ret
+
