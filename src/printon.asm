@@ -854,8 +854,8 @@ UPPER_VOWEL_TABLE:
 UPPER_VOWEL_TABLE_LEN equ 7
 
 LOWER_VOWEL_TABLE:
-	db $D8,$D9,$DA
-LOWER_VOWEL_TABLE_LEN equ 3
+	db $D8,$D9                     ; 9.37: $DA ไม่ใช่สระล่าง -- ต้นฉบับ (ฟอนต์+ตาราง) ใช้ $DA เป็นจุด '.' ตัวปกติ
+LOWER_VOWEL_TABLE_LEN equ 2
 
 TONE_MARK_TABLE:
 	db $E8,$E9,$EA,$EB,$EC
