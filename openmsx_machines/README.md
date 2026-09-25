@@ -1,17 +1,22 @@
-# openMSX machine config for the bug-8 regression test
+# เครื่องจำลอง openMSX ที่ใช้ทดสอบ
 
-`UserMSX1_expanded.xml` is a custom openMSX machine: primary slot 0 is **expanded**
-(subslotted, `<secondary slot="0">` wrapping the system ROM), matching how many real
-MSX1/MSX2 machines are actually wired (including the hardware the bug-8 report came
-from). The project's default test configs use a *non*-expanded slot 0, which cannot
-reproduce bug 8 (SPEC_TH.md 9.11) at all -- see that section for why.
+| ไฟล์ | เครื่อง | system ROM ที่ต้องมี |
+|---|---|---|
+| `UserMSX1.xml` | MSX1 (slot 0 ไม่ขยาย) | `MSX.rom` |
+| `UserMSX1_expanded.xml` | MSX1 ที่ slot 0 ขยาย (แบบเครื่องจริงหลายรุ่น) | `MSX.rom` |
+| `UserMSX2.xml` | MSX2 | `MSX2.rom`, `MSX2EXT.rom` |
+| `UserMSX2P.xml` | MSX2+ | `MSX2P.rom`, `MSX2PEXT.rom` |
+| `PhilipsDisk.xml` | extension: disk interface WD2793 | `PHILIPSDISK.rom` |
 
-To use it: edit the `<filename>` path inside to point at your own MSX1 system ROM,
-copy the file into `~/.openMSX/share/machines/`, then:
+ชื่อไฟล์ ROM ตรงกับชุด `Machines/Shared Roms` ของ blueMSX และระบุ sha1 ไว้ openMSX จึงหาเจอจาก systemroms เอง
 
+ติดตั้ง:
 ```
-export SDL_VIDEODRIVER=dummy SDL_AUDIODRIVER=dummy
-openmsx -machine UserMSX1_expanded -carta build/thairom.rom \
-        -script ../test_phase3_expanded_slot_bug8.tcl
-cat /tmp/bug8_regression_out.txt   # must say PASS
+cp UserMSX*.xml            ~/.openMSX/share/machines/
+cp PhilipsDisk.xml         ~/.openMSX/share/extensions/
+cp <blueMSX>/Machines/Shared\ Roms/{MSX,MSX2,MSX2EXT,MSX2P,MSX2PEXT,PHILIPSDISK}.rom ~/.openMSX/share/systemroms/
 ```
+แล้วรัน `scripts/run_tests.sh` ที่ root ของ repo
+
+ทดสอบกับ disk: `openmsx -machine UserMSX2 -ext PhilipsDisk -carta build/thairom.rom`
+(ROM อยู่ slot ก่อน disk) หรือ `-ext PhilipsDisk -cartb build/thairom.rom` (disk ก่อน)

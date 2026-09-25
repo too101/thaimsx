@@ -13,8 +13,8 @@ after time 13 {
 }
 after time 14 { kstr "list\r" }
 after time 15 {
-    screenshot -raw /tmp/msxtest/t/shot_list.png
+    screenshot -raw /tmp/shot_list.png
     for {set r 1} {$r <= 24} {incr r} { log "R$r [vramrow $r]" }
     kstr "run\r"
 }
-after time 16 { screenshot -raw /tmp/msxtest/t/shot_run.png; log done; close $::out; exit }
+after time 16 { screenshot -raw /tmp/shot_run.png; log done; close $::out; exit }

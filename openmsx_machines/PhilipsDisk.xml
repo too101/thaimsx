@@ -9,7 +9,7 @@
           <mem base="0x4000" size="0x4000"/>
           <broken_fdc_read>false</broken_fdc_read>
           <connectionstyle>Philips</connectionstyle>
-          <rom><filename>/root/.openMSX/share/systemroms/PHILIPSDISK.rom</filename></rom>
+          <rom><filename>PHILIPSDISK.rom</filename><sha1>c3efedda7ab947a06d9345f7b8261076fa7ceeef</sha1></rom>
           <drives>1</drives>
         </WD2793>
       </secondary>

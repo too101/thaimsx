@@ -15,14 +15,14 @@
   <devices>
 
     <primary slot="0">
-      <secondary slot="0">
+      
         <ROM id="MSX BIOS with BASIC ROM">
           <mem base="0x0000" size="0x8000"/>
           <rom>
             <filename>MSX.rom</filename><sha1>409e82adac40f6bdd18eb6c84e8b2fbdc7fb5498</sha1>
           </rom>
         </ROM>
-      </secondary>
+      
     </primary>
 
     <primary external="true" slot="1"/>

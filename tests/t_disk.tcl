@@ -1,4 +1,4 @@
-source /tmp/msxtest/thairom/tests_919/lib.tcl
+source [file dirname [info script]]/lib.tcl
 set throttle off
 file delete /tmp/d.dsk
 diskmanipulator create /tmp/d.dsk 720k

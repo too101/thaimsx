@@ -19,7 +19,7 @@
     <primary slot="0">
       <ROM id="C-BIOS Main ROM">
         <mem base="0x0000" size="0x8000"/>
-        <rom><filename>/tmp/msxtest/MSX2.rom</filename></rom>
+        <rom><filename>MSX2.rom</filename><sha1>6103b39f1e38d1aa2d84b1c3219c44f1abb5436e</sha1></rom>
       </ROM>
 
       </primary>
@@ -33,7 +33,7 @@
       <secondary slot="0">
         <ROM id="C-BIOS Sub ROM">
           <mem base="0x0000" size="0x4000"/>
-          <rom><filename>/tmp/msxtest/MSX2EXT.rom</filename></rom>
+          <rom><filename>MSX2EXT.rom</filename><sha1>5c1f9c7fb655e43d38e5dd1fcc6b942b2ff68b02</sha1></rom>
         </ROM>
       </secondary>
 
