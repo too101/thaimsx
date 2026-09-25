@@ -13,7 +13,7 @@ run() { # machine outname testscript [TEST]
 }
 for m in UserMSX1 UserMSX1_expanded UserMSX2 UserMSX2P; do
   ( for t in t_inlin t_input t_edit t_off t_bs t_scroll t_cursor t_boot t_w80 t_924 t_blink \
-             t_a13 t_select t_a45 t_strfn t_d t_grp t_offfont; do run $m $t $t; done ) &
+             t_a13 t_select t_a45 t_strfn t_d t_grp t_offfont t_cls; do run $m $t $t; done ) &
   ( for c in ghost enter2 bs del ins prog bottom; do run $m c_$c t_cont2 $c; done ) &
 done
 wait

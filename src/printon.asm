@@ -216,14 +216,10 @@ PRINTHOOK_BODY:
 	; ที่ซ้อนไว้ระหว่างที่ CSRY ยังไม่ถูก resync)
 	xor a
 	ld (CURSOR_BLINK_FLAG),a
-	pop af
-	push af
-	ld c,a                     ; C = ตัวอักษรที่กำลังพิมพ์
 	call PRINT_RESYNC          ; 9.25: รวมขั้น 1/1.6 เดิม + ghost + ต่อแถว (ใช้ร่วมกับ CHGE_HOOK)
 	pop af
 	push af
-	ld c,a
-	jr .after_resync
+	ld c,a                     ; C = ตัวอักษรที่กำลังพิมพ์
 
 .after_resync:
 	; --- 9.20: BS/DEL ของตัวแก้ไขบรรทัดขณะ PRINTON (KEYC_HOOK ส่งมาเป็นโค้ดส่วนตัว) ---
@@ -2006,7 +2002,13 @@ PRINT_RESYNC:
 	call WRTVRM
 .rs_wrap:
 	call WRAP_FIX
+	; 9.41: แถว 1 ไม่มีแถวสระบน (หลัง CLS / HOME / LOCATE ,0) -- ย้ายลงแถว 2 เหมือนตอนเปิด PRINTON
 	ld a,(CSRY)
+	cp 1
+	jr nz,.rs_row
+	inc a
+	ld (CSRY),a
+.rs_row:
 	ld (ix+PRINT_ROW),a
 	jp COMBINE_FIX
 
