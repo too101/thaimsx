@@ -11,12 +11,16 @@ ROM ตลับ (8 KB) ที่เพิ่มภาษาไทยให้ M
 
 ## ที่มา
 
-- **สร้างใหม่ทั้งหมด** โดยอ้างอิงฟังก์ชันจาก ROM **MSX-ไทย Version 1.02, Copyright 1988 by V. Oucharearn & Kawi Co. Ltd.**
+- **เขียนโค้ดใหม่ทั้งหมด** โดยศึกษา (reverse engineering) การทำงานจาก ROM **MSX-ไทย Version 1.02, Copyright 1988 by V. Oucharearn & Kawi Co. Ltd.**
   ซึ่งใช้ได้กับ MSX1 เท่านั้น (บน MSX2/MSX2+ ตัวอักษรเพี้ยน, ค้าง, โหมดแสดงผล 3 ระดับใช้ไม่ได้) — โค้ดใหม่เรียกเฉพาะ
   BIOS/ตัวแปรระบบที่เป็นมาตรฐาน ไม่แก้ stack ของ BIOS แบบต้นฉบับ จึงทำงานได้ทุกรุ่น
 - **ฟอนต์** จาก MSX-ไทย ปรับตำแหน่งวรรณยุกต์ (ชิดล่างของช่อง เพื่อให้อยู่ใกล้พยัญชนะเมื่อวาดในแถวบน) และพินทุ
 - **แก้ bug แป้นพิมพ์** ให้ถูกต้องตามแป้นเกษมณี
 - **ลดขนาดให้เหลือ 8 KB** จาก 16 KB ของต้นฉบับ
+- **ข้อมูลที่นำมาจากต้นฉบับ** (ไม่ได้สร้างใหม่): ฟอนต์ไทย (`assets/font_raw.bin`, ปรับตำแหน่งวรรณยุกต์และพินทุ),
+  ตารางคำของปุ่ม GRAPH (`src/kwtables_data.asm`) และการจัดแป้นเกษมณีที่แกะจากตารางแป้นของต้นฉบับ
+  — ลิขสิทธิ์ของส่วนนี้เป็นของเจ้าของเดิม
+- ไม่ใช่ clean-room: ผู้แกะต้นฉบับกับผู้เขียนโค้ดใหม่เป็นคนเดียวกัน (บันทึกการแกะอยู่ใน `docs/DEV_NOTES_TH.md`)
 - repo นี้ไม่มี ROM ต้นฉบับ
 
 <details><summary>ฟอนต์ไทยทั้งชุด</summary>
@@ -139,8 +143,11 @@ scripts/run_tests.sh      # ผลแต่ละเทสอยู่ใน out
 
 **thaimsx** is an 8 KB cartridge ROM that adds Thai to MSX BASIC on **MSX1, MSX2 and MSX2+** (with or without a disk drive).
 
-- A new implementation modelled on the functions of *MSX-ไทย Version 1.02, © 1988 V. Oucharearn & Kawi Co. Ltd.*, which
-  only works on MSX1. This code uses standard BIOS entries and system variables only, so it runs on every generation.
+- A rewrite based on reverse engineering *MSX-ไทย Version 1.02, © 1988 V. Oucharearn & Kawi Co. Ltd.*, which
+  only works on MSX1. The Z80 code is new and uses standard BIOS entries and system variables only, so it runs on
+  every generation. This is not a clean-room implementation: the same party analysed the original and wrote the new code.
+- Data taken from the original (not recreated): the Thai font, the GRAPH keyword table and the Kedmanee key layout
+  extracted from its keyboard tables. Rights to that data remain with the original authors.
   The original ROM is not included in this repository.
 - Font taken from MSX-ไทย with tone marks and phinthu repositioned; keyboard bugs fixed to match the Kedmanee layout;
   size reduced from 16 KB to 8 KB.

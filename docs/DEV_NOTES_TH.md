@@ -1,4 +1,4 @@
-# สเปกการเขียน Thai BASIC ROM ใหม่ทั้งหมด (clean-room rewrite)
+# สเปกการเขียน Thai BASIC ROM ใหม่ทั้งหมด (rewrite จากการแกะ ROM ต้นฉบับ — ไม่ใช่ clean-room)
 
 เอกสารนี้เป็นสเปกสำหรับเขียน MSX Thai BASIC cartridge ใหม่ทั้งหมดเป็น Z80 assembly source (ไม่ใช่การแพตช์
 ไบต์แบบเดิม) ตามที่ตกลงกันไว้:
