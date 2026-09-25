@@ -34,6 +34,17 @@ ROM ตลับ (8 KB) ที่เพิ่มภาษาไทยให้ M
 ดาวน์โหลดไฟล์ ROM (8 KB) จากหน้า [Releases](https://github.com/too101/thaimsx/releases) (ชื่อเวอร์ชันเป็นวันที่ เช่น `v20260925`)
 — ใส่เป็น cartridge ใน emulator (blueMSX / openMSX) หรือเขียนลงตลับจริง (ROM 8 KB ที่ $4000) หรือ build เองจาก source
 
+**ไม่มีตลับ? โหลดจากดิสก์หรือเทปได้** (ไฟล์ `THAIMSX.BIN` / `THAIMSX.CAS` ใน Releases):
+```basic
+BLOAD"THAIMSX.BIN",R      ' จากดิสก์ (ใส่ใน AUTOEXEC.BAS ได้)
+BLOAD"CAS:",R             ' จากเทป (THAIMSX.CAS)
+```
+- โหลดเสร็จ ระบบไทยเปิดเองพร้อมข้อความเวอร์ชัน ใช้ได้ทุกคำสั่งเหมือนตลับ และ **Bytes free ไม่ลดลงเลย**
+  (โค้ดไปอยู่ใน RAM ช่วง page 1 ที่ BASIC ไม่ได้ใช้)
+- ต้องมี RAM 64 KB (MSX1 ที่มี RAM 32 KB ใช้ไม่ได้ จะขึ้น `need 64KB RAM`) — MSX2/MSX2+ ใช้ได้ทุกเครื่อง
+- จาก MSX-DOS: พิมพ์ `BASIC` แล้วค่อย BLOAD — ถ้ากลับไป DOS (หรือกด reset) ต้องโหลดใหม่
+- อย่าใช้พร้อมกับตลับ thaimsx
+
 เปิดเครื่องแล้วระบบไทยเปิดเอง ขึ้นข้อความ `BASIC ไทย version 1.0` (กดปุ่ม **CODE** ค้างตอนเปิดเครื่อง = เข้า BASIC ปกติ)
 
 ### คำสั่ง CALL ทั้งหมด
@@ -119,7 +130,7 @@ ROM ตลับ (8 KB) ที่เพิ่มภาษาไทยให้ M
 
 ต้องมี [pasmo](https://pasmo.speccy.org/) และ python3
 ```
-./build.sh          # -> build/thairom.rom (8192 ไบต์) ไฟล์เดียวกับที่แจกใน Releases
+./build.sh          # -> build/thairom.rom (ตลับ 8192 ไบต์), build/THAIMSX.BIN + THAIMSX.CAS (รุ่น BLOAD)
 ```
 
 ## ทดสอบ
@@ -127,6 +138,7 @@ ROM ตลับ (8 KB) ที่เพิ่มภาษาไทยให้ M
 ใช้ openMSX แบบไม่มีหน้าจอ ดูวิธีติดตั้งเครื่องจำลองที่ [`openmsx_machines/README.md`](openmsx_machines/README.md)
 ```
 scripts/run_tests.sh      # ผลแต่ละเทสอยู่ใน out/, เทียบผลเครื่องพิมพ์กับ tests/t_prn_expected.prn
+scripts/run_tests.sh --ram   # ชุดเดียวกันกับรุ่น BLOAD (ผลใน outram/)
 ```
 
 ## โครงสร้าง
@@ -136,6 +148,7 @@ scripts/run_tests.sh      # ผลแต่ละเทสอยู่ใน out
 | `src/` | source Z80 (pasmo) — `main.asm` รวมทุกไฟล์ |
 | `assets/font_raw.bin` | ฟอนต์ไทย 255 ตัว × 8 ไบต์ |
 | `docs/screenshots/` | ภาพหน้าจอ |
+| `src/loader_bload.asm` | ตัวโหลดของรุ่น BLOAD (`build/THAIMSX.BIN`, `scripts/mkcas.py` ทำไฟล์เทป) |
 | `tests/` | สคริปต์ทดสอบ openMSX (TCL), `tests/legacy/` ชุดทดสอบช่วงแรก |
 | `docs/DEV_NOTES_TH.md` | บันทึกการพัฒนา การวิเคราะห์ ROM ต้นฉบับ และบั๊กที่แก้ทีละข้อ |
 
@@ -168,5 +181,8 @@ scripts/run_tests.sh      # ผลแต่ละเทสอยู่ใน out
 | `CALL MLSTR(s$,v$)` | | Strip upper/lower vowels and tone marks (middle row only) |
 | `CALL LPRINT` / `CALL LPRINT("n")` | | Set up the printer for 3-row Thai (line width n = 1–135) |
 
-**Download** the ROM from [Releases](https://github.com/too101/thaimsx/releases). **Build**: `./build.sh` (needs pasmo and python3).
+- No cartridge? `BLOAD"THAIMSX.BIN",R` from disk or `BLOAD"CAS:",R` from tape (`THAIMSX.CAS`) loads the same code into
+  page-1 RAM (needs 64 KB RAM); BASIC's free memory is not reduced.
+
+**Download** the ROM, BIN and CAS files from [Releases](https://github.com/too101/thaimsx/releases). **Build**: `./build.sh` (needs pasmo and python3).
 **Tests**: `scripts/run_tests.sh` (headless openMSX, see `openmsx_machines/README.md`).

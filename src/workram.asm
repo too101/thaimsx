@@ -56,6 +56,20 @@ WORK_ALLOC:
 	or (hl)
 	ret nz                        ; จองไว้แล้ว
 	dec hl
+	IF DEFINED RAMVER
+	; 9.43: รุ่นโหลดลง RAM (BLOAD/DOS) -- โค้ดอยู่ใน RAM ของ page 1 แล้ว วางบล็อกต่อท้ายโค้ดใน page 1 เลย
+	; (ทุกจุดเข้าผ่าน CALLF ซึ่งเปิด page 1 เป็น slot เรา) ไม่ต้องลด HIMEM -- Bytes free เท่าเครื่องเปล่า
+	ld (hl),WORK_RAM and $FF
+	inc hl
+	ld (hl),WORK_RAM/256
+	ld hl,WORK_RAM
+	ld b,WORK_SIZE
+.wr_zero:
+	ld (hl),0
+	inc hl
+	djnz .wr_zero
+	ret
+	ELSE
 	push hl
 	; 9.29: disk ROM ตัวหลัก (master) ใช้ RAM ตายตัว $F1C9-$F37F เป็นพื้นที่ระบบของ DOS เสมอ -- ตอน INIT
 	; ล้างช่วงนี้แล้วลด HIMEM ลง $1BF จากค่าปัจจุบัน (disassembly disk ROM $57A9-$57C3) ถ้าเรา init ก่อน
@@ -88,6 +102,7 @@ WORK_ALLOC:
 	inc hl
 	ld (hl),d
 	; fall through -> FIX_FILES
+	ENDIF
 
 ; FIX_FILES: BASIC จัดพื้นที่ file buffer (FILTAB/FCB) ไว้ใต้ HIMEM "ก่อน" เรียก INIT ของ cartridge
 ; (MSX1/2/2+: ตั้งที่ $7CCC ก่อน scan slot ที่ $7D14 และไม่คำนวณใหม่หลัง scan) -- ถ้าแค่ลด HIMEM

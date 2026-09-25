@@ -1548,6 +1548,25 @@ cursor กลับไปแถว 1 ซึ่งไม่มีแถวสร�
 - ขนาด: เปลี่ยน jp -> jr 17 จุดที่อยู่ในระยะ (ลอง assemble ทีละจุด) เหลือ 8179 ไบต์
 - tests/t_auto.tcl: BUF = "10 print ..." และ LIST เห็นบรรทัด 10, AUTO ขึ้น 20 ต่อ
 
+### 9.43 รุ่นโหลดลง RAM (BLOAD / เทป)
+
+ผู้ใช้ขอให้โหลดด้วย BLOAD ได้ (และถามถึง MSX-DOS)
+- CALL ของ BASIC ($55CB MSX1) หา slot ที่ SLTATR bit 5 = 1 แล้วอ่านที่อยู่ตัวรับคำสั่งจาก $4004 ของ slot นั้นผ่าน RDSLT
+  แล้ว CALSLT -- ไม่เช็ค "AB" ไม่สนว่าเป็น ROM หรือ RAM -> วาง image ไว้ใน RAM page 1 แล้วตั้ง SLTATR เองก็ใช้ CALL ได้
+- `build/thaimsx_ram.bin` = source เดียวกัน assemble ด้วย `--equ RAMVER=1`: WORK_ALLOC ชี้บล็อกตัวแปรไปต่อท้ายโค้ดใน page 1
+  (WORK_RAM = CODE_END) ไม่ลด HIMEM/ไม่ยุ่ง FILTAB -- ตัวแปรทุกตัวถูกใช้เฉพาะในโค้ดเราซึ่งทำงานตอน page 1 = slot เรา
+  เสมอ (ทุกจุดเข้าผ่าน CALLF/CALSLT) และ CALBAS ทุกจุดส่งแค่ BUF (page 3) ให้ BASIC ไม่เคยส่ง pointer เข้าบล็อก
+- ตัวโหลด `src/loader_bload.asm` ($9000): slot ของ RAM page 3 (PSLTRG + subslot register) -> ทดสอบว่า page 1 ของ slot นั้น
+  เป็น RAM (RDSLT/WRSLT) -> ENASLT page 1 + LDIR -> ENASLT คืน main ROM -> SLTATR |= $20 -> CALSLT INIT ->
+  H.READ ทำ THAION + ข้อความเวอร์ชันตอน "Ok" ถัดไปเหมือนตอนบูตด้วยตลับ; SLTATR ตั้งอยู่แล้ว = "already loaded"
+- ไฟล์ ROM ของตลับไม่เปลี่ยน (sha1 เดิม) -- `scripts/mkcas.py` ทำ .CAS
+- ทดสอบ: ดิสก์ (MSX2+/MSX2 + Philips disk ROM: fre(0) ก่อน/หลัง = 23432 เท่ากัน, PRINTON + SAVE/LOAD, TNSTR, โหลดซ้ำ),
+  เทป (MSX1, MSX1 expanded, MSX2: fre เท่าเดิม 28815, PRINTON LIST/RUN), `scripts/run_tests.sh --ram` ชุดเต็มผลตรงกับ
+  ตลับ ยกเว้นบรรทัดที่อ่านตัวแปรผ่าน memory ของ CPU (บล็อกอยู่ใน page 1 RAM ที่ debugger มองไม่เห็นตอน page 1 = BASIC)
+  และแถวที่เลื่อนเพราะบรรทัด DEFUSR ที่เทสใช้โหลด
+- MSX1 + Philips disk ROM ใน openMSX เข้า "Enter date" ของ DOS แม้ไม่มีอะไรเสียบ -- เป็นเรื่องของ config ทดสอบ ไม่เกี่ยวกับเรา
+- .COM สำหรับ MSX-DOS: ยังไม่ทำ -- ไม่มีไฟล์ระบบ DOS ให้ทดสอบ; จาก DOS ให้พิมพ์ BASIC แล้ว BLOAD แทน
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)

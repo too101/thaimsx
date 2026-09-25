@@ -1,5 +1,5 @@
 #!/bin/bash
-# build.sh -- ประกอบ source ด้วย pasmo แล้ว pad ให้เป็น 16KB ROM (มาตรฐาน MSX cartridge)
+# build.sh -- ประกอบ source ด้วย pasmo แล้ว pad ให้เป็น 8KB ROM (มาตรฐาน MSX cartridge)
 set -e
 cd "$(dirname "$0")"
 mkdir -p build
@@ -15,3 +15,8 @@ with open('build/thairom.rom','wb') as f:
     f.write(padded)
 print(f"padded to {target} bytes -> build/thairom.rom")
 PYEOF
+# 9.43: รุ่นโหลดลง RAM -- BLOAD"THAIMSX.BIN",R
+pasmo --equ RAMVER=1 src/main.asm build/thaimsx_ram.bin build/thaimsx_ram.sym
+pasmo src/loader_bload.asm build/THAIMSX.BIN
+python3 scripts/mkcas.py build/THAIMSX.BIN build/THAIMSX.CAS THAI
+echo "RAM image: $(stat -c %s build/thaimsx_ram.bin) bytes, BLOAD file: $(stat -c %s build/THAIMSX.BIN) bytes -> build/THAIMSX.BIN"

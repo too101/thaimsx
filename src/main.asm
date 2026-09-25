@@ -23,3 +23,12 @@
 	include "src/printer.asm"
 	include "src/font_data.asm"
 	include "src/kwtables_data.asm"
+
+CODE_END:
+WORK_RAM    equ CODE_END      ; 9.43: บล็อกตัวแปรของรุ่น RAM (ต่อท้ายโค้ดใน page 1)
+	IF DEFINED RAMVER
+	IF WORK_RAM+WORK_SIZE > $8000
+	.ERROR RAM image + work area exceed page 1
+	ENDIF
+	ENDIF
+

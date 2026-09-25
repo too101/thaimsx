@@ -1,5 +1,6 @@
 build/
 out/
+outram/
 *_out.txt
 debug_out.txt
 phase3_probe.txt

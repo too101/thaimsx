@@ -2,6 +2,11 @@
 
 เวอร์ชันตั้งชื่อตามวันที่ (`vYYYYMMDD`) — ไฟล์ ROM อยู่ในหน้า [Releases](https://github.com/too101/thaimsx/releases)
 
+## v20260925 — เพิ่มเติม
+
+- รุ่นโหลดจากดิสก์/เทป: `THAIMSX.BIN` (`BLOAD"THAIMSX.BIN",R`) และ `THAIMSX.CAS` (`BLOAD"CAS:",R`) — โค้ดชุดเดียวกับตลับ
+  วางใน RAM ช่วง page 1 (ต้องมี RAM 64 KB) ไม่ลด Bytes free ไฟล์ ROM ของตลับไม่เปลี่ยน
+
 ## v20260925
 
 รุ่นแรก — ROM 8 KB (`thaimsx-v20260925.rom`) ใช้ได้กับ MSX1 / MSX2 / MSX2+ (มีหรือไม่มี disk drive)
