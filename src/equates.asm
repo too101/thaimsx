@@ -1,3 +1,4 @@
+AUTFLG       equ $F6AA   ; โหมด AUTO ของ BASIC (0 = ไม่อยู่ใน AUTO)
 ; ==========================================================================
 ; equates.asm -- ค่าคงที่ทั้งหมด: BIOS jump table (official, portable),
 ;                system variable, และตำแหน่ง flag RAM ของเราเอง

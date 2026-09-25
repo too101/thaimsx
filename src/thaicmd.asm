@@ -343,7 +343,7 @@ STRFN:
 	pop hl
 	call SKIPSP
 	cp ')'
-	jp nz,SF_SNERR
+	jr nz,SF_SNERR
 	BCALL BAS_CHRGTR              ; ข้าม ')'
 	jp STMT_DONE
 

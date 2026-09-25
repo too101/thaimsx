@@ -491,7 +491,7 @@ KEYC_BODY:
 	pop af
 	rlca
 	jr nc,.kw_push
-	jp .push_after
+	jr .push_after
 .no_kw:
 	ld a,(ix+INPUT_MODE)
 	or a

@@ -438,7 +438,7 @@ PRINTHOOK_BODY:
 	cp 3
 	jp z,.lower_vowel            ; class=3 (สระล่าง) -- ซ้อนแถว+1 เสมอ ไม่มีการผสมใด ๆ
 	cp 1
-	jp z,.upper_vowel            ; class=1 (สระบน) 9.32: ํ หลังวรรณยุกต์ผสมได้ -- เดิม: -- วางแถว-1 เปล่า ๆ (ยังไม่มีอะไรให้ผสมตอนนี้ --
+	jr z,.upper_vowel            ; class=1 (สระบน) 9.32: ํ หลังวรรณยุกต์ผสมได้ -- เดิม: -- วางแถว-1 เปล่า ๆ (ยังไม่มีอะไรให้ผสมตอนนี้ --
 	                              ; ถ้าวรรณยุกต์ตามมาทีหลัง ค่อยมาผสมทับตอนนั้น ดูขั้นล่าง)
 
 	; class=2 (วรรณยุกต์) -- เช็คว่าแถว-1 คอลัมน์เดียวกันมีสระบนอยู่แล้วหรือไม่ ถ้ามี **ต้องผสม
@@ -494,7 +494,7 @@ PRINTHOOK_BODY:
 	ld (ix+PRINT_LAST_MARK_COL),a
 	ld a,TRUE
 	ld (ix+PRINT_LAST_MARK_VALID),a
-	jp .place_row_minus1          ; ตกลงไปวาดที่แถว-1 ตามปกติ (BIOS จะวาดวรรณยุกต์ตัวเปล่าทับ
+	jr .place_row_minus1          ; ตกลงไปวาดที่แถว-1 ตามปกติ (BIOS จะวาดวรรณยุกต์ตัวเปล่าทับ
 	                               ; ตำแหน่งนี้ไปก่อน -- ผิดชั่วคราว 1 จังหวะ แล้วค่อยแก้เป็น glyph
 	                               ; ผสมตอนเรียก PRINTHOOK ครั้งถัดไปตามที่เตรียมไว้ข้างบน)
 
@@ -504,11 +504,11 @@ PRINTHOOK_BODY:
 .upper_vowel:
 	ld a,c
 	cp $ED
-	jp nz,.place_row_minus1
+	jr nz,.place_row_minus1
 	ld a,(ix+MARK_ROW)
 	dec a
 	jp m,.place_row_minus1
-	jp z,.place_row_minus1
+	jr z,.place_row_minus1
 	push bc
 	call NAMETAB_ADDR
 	pop bc
@@ -516,13 +516,13 @@ PRINTHOOK_BODY:
 	ld d,a                        ; D = ตัวในช่องแถวบน
 	call CLASSIFY_THAI_MARK
 	cp 2
-	jp nz,.place_row_minus1       ; ไม่ใช่วรรณยุกต์
+	jr nz,.place_row_minus1       ; ไม่ใช่วรรณยุกต์
 	push bc
 	ld c,d                        ; C = วรรณยุกต์
 	ld a,$ED
 	call COMBINE_LOOKUP
 	pop bc
-	jp nc,.place_row_minus1
+	jr nc,.place_row_minus1
 	ld (ix+PRINT_COMBINE_CODE),a
 	ld a,(ix+MARK_ROW)
 	dec a
@@ -536,7 +536,7 @@ PRINTHOOK_BODY:
 	ld a,TRUE
 	ld (ix+PRINT_COMBINE_PENDING),a
 	ld (ix+PRINT_LAST_MARK_VALID),a
-	jp .place_row_minus1
+	jr .place_row_minus1
 
 .lower_vowel:
 	; class=3 (สระล่าง อุ/อู) -- ซ้อนแถว+1 เสมอ (ใต้พยัญชนะ) ไม่มีการผสมกับวรรณยุกต์ใด ๆ (วรรณยุกต์
@@ -566,13 +566,13 @@ PRINTHOOK_BODY:
 	jp z,.done                   ; แถว=0 ก็ผิดปกติเช่นกัน (CSRY เป็น 1-based)
 	call NOTE_LAST_MARK
 	call GHOST_CHECK             ; 9.25
-	jp c,.done
+	jr c,.done
 	ld (CSRY),a
 	ld a,e
 	ld (CSRX),a
 	ld a,TRUE
 	ld (ix+PRINT_REDIRECT),a
-	jp .done
+	jr .done
 
 ; --- 9.20: BS ของตัวแก้ไขบรรทัดขณะ PRINTON ---
 ;  ถ้าเพิ่งพิมพ์สระ/วรรณยุกต์ไปทันที -> ลบเฉพาะเครื่องหมายตัวนั้น (คืนค่าช่องเดิม: ว่าง หรือสระบนก่อนผสม)
@@ -590,7 +590,7 @@ PRINTHOOK_BODY:
 	call NAMETAB_ADDR
 	ld a,(ix+PRINT_LAST_MARK_VOWEL)
 	call WRTVRM
-	jp .done
+	jr .done
 .tbs_col:
 	ld a,(CSRX)
 	dec a
@@ -601,13 +601,13 @@ PRINTHOOK_BODY:
 	ld a,(CSRX)
 	dec a
 	ld (CSRX),a
-	jp .done
+	jr .done
 .tbs_wrap:
 	; 9.25: ต้นแถวต่อ -> ลบตัวคอลัมน์สุดท้ายของแถวข้อความก่อนหน้า แล้วย้าย cursor ไปที่นั่น
 	ld a,(ix+PRINT_ROW)
 	call LT_FLAGS
 	and LT_UP
-	jp z,.done
+	jr z,.done
 	ld a,(ix+PRINT_ROW)
 	sub 3
 	ld (ix+PRINT_ROW),a
@@ -617,7 +617,7 @@ PRINTHOOK_BODY:
 	ld e,a
 	ld a,(ix+PRINT_ROW)
 	call DELCOL
-	jp .done
+	jr .done
 ; --- 9.20: DEL = ลบทั้งช่องที่ cursor (cursor ไม่ขยับ) ---
 .thai_del:
 	xor a
@@ -882,6 +882,9 @@ INLIN_REBUILD:
 	jr .rb_up
 .rb_single:
 	ld hl,(FSTPOS)                ; L = แถว, H = คอลัมน์ที่เริ่มรับ
+	ld a,(AUTFLG)                 ; 9.42: โหมด AUTO BIOS อ่านจากคอลัมน์ 1 เสมอ (รวมเลขบรรทัด, $245D) --
+	or l                          ; AUTFLG = ' '/'*' (>=$20) OR แถว -> ไม่ตรงแถวใด = เริ่มคอลัมน์ 1
+	ld l,a
 	ld a,(ix+RB_ROW)
 	cp l
 	ld a,1
@@ -956,7 +959,7 @@ INLIN_REBUILD:
 	call RB_EMIT
 .rb_next:
 	inc (ix+RB_COL)
-	jp .rb_col
+	jr .rb_col
 .rb_end:
 	; --- 9.25: แถวนี้ต่อไปที่แถว+3 หรือไม่ (แถวที่กด Enter: BIOS เขียน LINTTB ทับไปแล้ว ดูจากแถว+3 แทน) ---
 	ld a,(ix+RB_M)
@@ -1304,7 +1307,7 @@ INSCOL:
 	ld a,(ix+IC_CARRY+2)
 	ld c,a
 	pop af
-	jp IC_PUT3
+	jr IC_PUT3
 .ic_next:
 	ld a,(ix+DC_ROW)
 	add a,3
