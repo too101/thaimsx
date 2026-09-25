@@ -1567,6 +1567,13 @@ cursor กลับไปแถว 1 ซึ่งไม่มีแถวสร�
 - MSX1 + Philips disk ROM ใน openMSX เข้า "Enter date" ของ DOS แม้ไม่มีอะไรเสียบ -- เป็นเรื่องของ config ทดสอบ ไม่เกี่ยวกับเรา
 - .COM สำหรับ MSX-DOS: ยังไม่ทำ -- ไม่มีไฟล์ระบบ DOS ให้ทดสอบ; จาก DOS ให้พิมพ์ BASIC แล้ว BLOAD แทน
 
+### 9.44 ไฟล์เสียง WAV สำหรับเทปจริง
+
+`scripts/cas2wav.py`: .CAS -> .WAV 43200 Hz 8 บิต (บิต 0 = 1 รอบ 1200 Hz, บิต 1 = 2 รอบ 2400 Hz, start 0 + 8 บิต LSB ก่อน +
+stop 1 สองบิต; บล็อกชื่อไฟล์ = เงียบ 2 วิ + tone 16000 รอบ, บล็อกข้อมูล = เงียบ 1 วิ + tone 4000 รอบ)
+ทดสอบ tests/t_wav.tcl: MSX1 ใน openMSX `BLOAD"CAS:",R` จาก WAV ได้ครบ (fre 28815, CALL TNSTR ได้ ๒) -- 2400 baud ไม่ผ่านใน
+openMSX จึงไม่ใส่ตัวเลือกนี้
+
 ## 9. รายการบั๊กเดิมที่เวอร์ชันนี้ต้องไม่มี
 
 - [x] MSX1 boot hang (เดิมแก้ใน v3 — จะไม่เกิดเพราะไม่ใช้ internal INITXT address เลย)

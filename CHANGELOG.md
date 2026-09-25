@@ -6,6 +6,7 @@
 
 - รุ่นโหลดจากดิสก์/เทป: `THAIMSX.BIN` (`BLOAD"THAIMSX.BIN",R`) และ `THAIMSX.CAS` (`BLOAD"CAS:",R`) — โค้ดชุดเดียวกับตลับ
   วางใน RAM ช่วง page 1 (ต้องมี RAM 64 KB) ไม่ลด Bytes free ไฟล์ ROM ของตลับไม่เปลี่ยน
+- `THAIMSX.WAV`: เสียงเทป 1200 baud สำหรับอัดลงเทปจริงหรือเล่นเข้าช่องเทปของ MSX
 
 ## v20260925
 

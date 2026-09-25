@@ -19,4 +19,5 @@ PYEOF
 pasmo --equ RAMVER=1 src/main.asm build/thaimsx_ram.bin build/thaimsx_ram.sym
 pasmo src/loader_bload.asm build/THAIMSX.BIN
 python3 scripts/mkcas.py build/THAIMSX.BIN build/THAIMSX.CAS THAI
+python3 scripts/cas2wav.py build/THAIMSX.CAS build/THAIMSX.WAV
 echo "RAM image: $(stat -c %s build/thaimsx_ram.bin) bytes, BLOAD file: $(stat -c %s build/THAIMSX.BIN) bytes -> build/THAIMSX.BIN"
